@@ -1,13 +1,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <WinSock2.h>
+#include <pthread.h>
+#include <time.h>
 #pragma comment(lib, "ws2_32.lib")  //加载 ws2_32.dll
 char myIP[20];
 int myPort;
 SOCKET sock;
 struct sockaddr_in sockAddr;
+int MAX_BUFFER_LEN = 200;
+char name[20];//用户名
+time_t nowtime;
 void init()
 {
+    //初始化DLL
     WSADATA wsaData;
     WSAStartup(MAKEWORD(2, 2), &wsaData);
     //创建socket
@@ -33,26 +39,64 @@ void init()
     }
     printf("客户端启动成功\n");
     printf("连接到服务器，IP地址为%s，端口号为%d\n",myIP,myPort);
+    //初始化用户名
+    printf("请输入用户名：");
+    scanf("%s",name);
+    printf("\n\n*****************************\n");
+    printf("欢迎%s 进入群聊\n",name);
+    printf("  输入quit 退出\n");
+    printf("\n*****************************\n\n");
 }
 void start()
 {
+    pthread_t id;
+    void* recv_thread(void*);
+    pthread_create(&id,0,recv_thread,0);
+    //向服务器发送连接成功信息
+    char buf2[MAX_BUFFER_LEN] = {};
+    sprintf(buf2,"%s进入了群聊",name);
+    time(&nowtime);
+    printf("进入的时间是: %s\n",ctime(&nowtime));
+    send(sock,buf2,strlen(buf2),0);
     while(1){
     //接收服务器传回的数据
-        char szBuffer[MAXBYTE] = {0};
-        if(recv(sock, szBuffer, MAXBYTE, NULL)==SOCKET_ERROR){
-            printf("接收信息错误");
+    //向服务器发送数据
+        char buf[MAX_BUFFER_LEN] = {};
+        scanf("%s",buf);
+        char msg[MAX_BUFFER_LEN] = {};
+        sprintf(msg,"%s发送的信息是:%s",name,buf);
+        send(sock,msg,strlen(msg),0);
+        if(strcmp(buf,"quit")==0){
+            memset(buf2,0,sizeof(buf2));
+            sprintf(buf2,"%s退出了群聊",name);
+            send(sock,buf2,strlen(buf2),0);
             break;
         }
-        //输出接收到的数据
-        else{printf("Message form server: %s\n", szBuffer);}
+        // char szBuffer[MAX_BUFFER_LEN] = {0};
+        // if(recv(sock, szBuffer, MAX_BUFFER_LEN, NULL)==SOCKET_ERROR){
+        //     printf("接收信息错误");
+        //     break;
+        // }
+        // //输出接收到的数据
+        // else{printf("Message form server: %s\n", szBuffer);}
     }
     //关闭套接字
     closesocket(sock);
 }
+//接收线程
+void* recv_thread(void* p){
+    while(1){
+        char buf[MAX_BUFFER_LEN] = {};
+        //发送的消息在发送那一端组织好
+        //只管接收就好
+        if (recv(sock,buf,sizeof(buf),0) == SOCKET_ERROR){
+            break;
+        }
+        printf("%s\n",buf);
+    }
+}
 int main()
 {
-    //初始化DLL
-    
     init();
     start();
     //终止使用 DLL
