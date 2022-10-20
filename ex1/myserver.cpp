@@ -3,10 +3,11 @@
 #include <WinSock2.h>
 #include <pthread.h>
 #include <time.h>
+#include "loghdr.h"
 #pragma comment (lib, "ws2_32.lib")  //加载 ws2_32.dll
 char myIP[20];
 int myPort;
-const int MAX_CLIENT_NUM=20;
+const int MAX_CLIENT_NUM=2;
 const int MAX_BUFFER_LEN = 1024;
 SOCKET servSock;
 SOCKET clntSockArr[MAX_CLIENT_NUM];
@@ -63,9 +64,12 @@ void SendAll(char* msg){
 			{
 			printf("open file error: \n");
 			}else{
-			sprintf(buf, "进入时间：%s\tIP地址：%s\n",ctime(&nowtime),myIP);
+            time(&nowtime);
+			sprintf(buf, "IP地址：%s\n",myIP);
+            addtimestamp(buf);
 			fputs(buf,logs);
-			sprintf(buf, "所发信息：%s\n",msg);
+			sprintf(buf, "%s\n",msg);
+            addtimestamp(buf);
 			fputs(buf,logs);
 			fclose(logs);
 			}
@@ -98,8 +102,10 @@ void* serv_thread(void* p)
             {
                 printf("OPEN LOGFILE ERROR");
             }else{
-                sprintf(buf, "退出时间：%s\tIP地址：%s\n",ctime(&nowtime),myIP);
+                sprintf(buf, "客户退出，IP地址：%s\n",myIP);
+                addtimestamp(buf);
                 fputs(buf,logs);
+                SendAll(buf);
                 fclose(logs);
             }
             pthread_exit(0);
@@ -133,10 +139,10 @@ void start()
                 pthread_create(&tid,0,serv_thread,&clntSock);
                 break;
             }
-            if (MAX_CLIENT_NUM == i){
+            if (MAX_CLIENT_NUM == i-1){
             //发送给客户端说聊天室满了
-            char* str = "对不起，聊天室已经满了!";
-            send(clntSock,str,strlen(str)+sizeof(char),0);
+            char const *msg_room_full = "对不起，聊天室已经满了!";
+            send(clntSock,msg_room_full,strlen(msg_room_full),0);
             closesocket(clntSock);
             }
         }

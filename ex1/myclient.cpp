@@ -3,12 +3,13 @@
 #include <WinSock2.h>
 #include <pthread.h>
 #include <time.h>
+#include "loghdr.h"
 #pragma comment(lib, "ws2_32.lib")  //加载 ws2_32.dll
 char myIP[20];
 int myPort;
 SOCKET sock;
 struct sockaddr_in sockAddr;
-int MAX_BUFFER_LEN = 200;
+int MAX_BUFFER_LEN = 1024;
 char name[20];//用户名
 time_t nowtime;
 void init()
@@ -55,8 +56,7 @@ void start()
     //向服务器发送连接成功信息
     char buf2[MAX_BUFFER_LEN] = {};
     sprintf(buf2,"%s进入了群聊",name);
-    time(&nowtime);
-    printf("进入的时间是: %s\n",ctime(&nowtime));
+    addtimestamp(buf2);
     send(sock,buf2,strlen(buf2),0);
     while(1){
     //接收服务器传回的数据
@@ -65,10 +65,12 @@ void start()
         scanf("%s",buf);
         char msg[MAX_BUFFER_LEN] = {};
         sprintf(msg,"%s发送的信息是:%s",name,buf);
+        addtimestamp(msg);
         send(sock,msg,strlen(msg),0);
         if(strcmp(buf,"quit")==0){
             memset(buf2,0,sizeof(buf2));
             sprintf(buf2,"%s退出了群聊",name);
+            addtimestamp(buf2);
             send(sock,buf2,strlen(buf2),0);
             break;
         }
@@ -89,7 +91,7 @@ void* recv_thread(void* p){
         char buf[MAX_BUFFER_LEN] = {};
         //发送的消息在发送那一端组织好
         //只管接收就好
-        if (recv(sock,buf,sizeof(buf),0) == SOCKET_ERROR){
+        if (recv(sock,buf,sizeof(buf),0) <=0){
             break;
         }
         printf("%s\n",buf);
