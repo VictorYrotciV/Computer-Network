@@ -1,8 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <WinSock2.h>
-#include <pthread.h>
-#include <time.h>
+
 #include "loghdr.h"
 #pragma comment(lib, "ws2_32.lib")  //加载 ws2_32.dll
 char myIP[20];
@@ -26,7 +22,7 @@ void init()
     //输入IP和端口号
     printf("请输入IP地址：");
     scanf("%s", myIP);
-    printf("\n请输入端口号：");
+    printf("请输入端口号：");
     scanf("%d", &myPort);
     printf("\n");
     //发起请求
@@ -44,8 +40,8 @@ void init()
     printf("请输入用户名：");
     scanf("%s",name);
     printf("\n\n*****************************\n");
-    printf("欢迎%s 进入群聊\n",name);
-    printf("  输入quit 退出\n");
+    printf("欢迎%s 进入聊天！\n",name);
+    printf("输入 quit 以退出\n");
     printf("\n*****************************\n\n");
 }
 void start()
@@ -55,22 +51,23 @@ void start()
     pthread_create(&id,0,recv_thread,0);
     //向服务器发送连接成功信息
     char buf2[MAX_BUFFER_LEN] = {};
-    sprintf(buf2,"%s进入了群聊",name);
-    addtimestamp(buf2);
+    memset(buf2,0,sizeof(buf2));
+    sprintf(buf2,"欢迎%s进入群聊",name);
     send(sock,buf2,strlen(buf2),0);
+    //在serv_thread函数中，刚连接时没有进入其while(1)的循环
+    //而是
     while(1){
     //接收服务器传回的数据
     //向服务器发送数据
         char buf[MAX_BUFFER_LEN] = {};
         scanf("%s",buf);
         char msg[MAX_BUFFER_LEN] = {};
-        sprintf(msg,"%s发送的信息是:%s",name,buf);
-        addtimestamp(msg);
+        sprintf(msg,"%s:%s",name,buf);
         send(sock,msg,strlen(msg),0);
         if(strcmp(buf,"quit")==0){
             memset(buf2,0,sizeof(buf2));
             sprintf(buf2,"%s退出了群聊",name);
-            addtimestamp(buf2);
+            //addtimestamp(buf2);
             send(sock,buf2,strlen(buf2),0);
             break;
         }

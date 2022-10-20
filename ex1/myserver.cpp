@@ -1,8 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <WinSock2.h>
-#include <pthread.h>
-#include <time.h>
 #include "loghdr.h"
 #pragma comment (lib, "ws2_32.lib")  //加载 ws2_32.dll
 char myIP[20];
@@ -64,16 +59,15 @@ void SendAll(char* msg){
 			{
 			printf("open file error: \n");
 			}else{
-            time(&nowtime);
-			sprintf(buf, "IP地址：%s\n",myIP);
+            memset(buf,0,sizeof(buf));
+			sprintf(buf, "%s",msg);
             addtimestamp(buf);
 			fputs(buf,logs);
-			sprintf(buf, "%s\n",msg);
-            addtimestamp(buf);
-			fputs(buf,logs);
+            fputs("\n",logs);
 			fclose(logs);
+           
 			}
-            send(clntSockArr[i],msg,strlen(msg),0);
+            send(clntSockArr[i],buf,strlen(buf),0);
         }
     }
 }
@@ -103,10 +97,7 @@ void* serv_thread(void* p)
                 printf("OPEN LOGFILE ERROR");
             }else{
                 sprintf(buf, "客户退出，IP地址：%s\n",myIP);
-                addtimestamp(buf);
-                fputs(buf,logs);
                 SendAll(buf);
-                fclose(logs);
             }
             pthread_exit(0);
         }
@@ -116,7 +107,7 @@ void* serv_thread(void* p)
 }
 void start()
 {
-    printf("服务器启动\n");
+    printf("服务器启动成功\n");
     while(1){
         SOCKADDR clntAddr;
         int nSize = sizeof(SOCKADDR);
