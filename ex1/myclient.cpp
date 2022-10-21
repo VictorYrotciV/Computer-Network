@@ -1,13 +1,12 @@
-
 #include "loghdr.h"
 #pragma comment(lib, "ws2_32.lib")  //加载 ws2_32.dll
-char myIP[20];
-int myPort;
-SOCKET sock;
+char servIP[20];//服务端ip
+int servPort;//服务端端口号
+SOCKET sock;//实例化全局socket
 struct sockaddr_in sockAddr;
-int MAX_BUFFER_LEN = 1024;
+int MAX_BUFFER_LEN = 1024;//消息缓冲区最大长度
 char name[20];//用户名
-time_t nowtime;
+time_t nowtime;//time
 void init()
 {
     //初始化DLL
@@ -21,21 +20,22 @@ void init()
     //向服务器发起请求
     //输入IP和端口号
     printf("请输入IP地址：");
-    scanf("%s", myIP);
+    scanf("%s", servIP);
     printf("请输入端口号：");
-    scanf("%d", &myPort);
+    scanf("%d", &servPort);
     printf("\n");
     //发起请求
     memset(&sockAddr, 0, sizeof(sockAddr));  //每个字节都用0填充
+    //init
     sockAddr.sin_family = PF_INET;
-    sockAddr.sin_addr.s_addr = inet_addr(myIP);
-    sockAddr.sin_port = htons(myPort);
-    if (connect(sock, (SOCKADDR*)&sockAddr, sizeof(SOCKADDR))==-1){
+    sockAddr.sin_addr.s_addr = inet_addr(servIP);
+    sockAddr.sin_port = htons(servPort);
+    if (connect(sock, (SOCKADDR*)&sockAddr, sizeof(SOCKADDR))==-1){//进行connect
         perror("无法连接到服务器!");
         exit(-1);
     }
     printf("客户端启动成功\n");
-    printf("连接到服务器，IP地址为%s，端口号为%d\n",myIP,myPort);
+    printf("连接到服务器，IP地址为%s，端口号为%d\n",servIP,servPort);
     //初始化用户名
     printf("请输入用户名：");
     scanf("%s",name);
@@ -46,6 +46,7 @@ void init()
 }
 void start()
 {
+    //每个客户端创建只需一个pthread用于接收，主线程用来发送
     pthread_t id;
     void* recv_thread(void*);
     pthread_create(&id,0,recv_thread,0);
@@ -53,31 +54,22 @@ void start()
     char buf2[MAX_BUFFER_LEN] = {};
     memset(buf2,0,sizeof(buf2));
     sprintf(buf2,"欢迎%s进入群聊",name);
+    addusername(buf2,name);
     send(sock,buf2,strlen(buf2),0);
-    //在serv_thread函数中，刚连接时没有进入其while(1)的循环
-    //而是
-    while(1){
+    while(1){//主线程，主要用来发送
     //接收服务器传回的数据
     //向服务器发送数据
         char buf[MAX_BUFFER_LEN] = {};
         scanf("%s",buf);
         char msg[MAX_BUFFER_LEN] = {};
-        sprintf(msg,"%s:%s",name,buf);
+        sprintf(msg,"%s",buf);
+        //在消息前端添加用户名，消息=[@名字]消息
+        addusername(msg,name);
         send(sock,msg,strlen(msg),0);
-        if(strcmp(buf,"quit")==0){
-            memset(buf2,0,sizeof(buf2));
-            sprintf(buf2,"%s退出了群聊",name);
-            //addtimestamp(buf2);
-            send(sock,buf2,strlen(buf2),0);
+        if(strcmp(buf,"quit")==0){//输入quit退出
+            //不用发quit消息，server的recv会检测到
             break;
         }
-        // char szBuffer[MAX_BUFFER_LEN] = {0};
-        // if(recv(sock, szBuffer, MAX_BUFFER_LEN, NULL)==SOCKET_ERROR){
-        //     printf("接收信息错误");
-        //     break;
-        // }
-        // //输出接收到的数据
-        // else{printf("Message form server: %s\n", szBuffer);}
     }
     //关闭套接字
     closesocket(sock);
@@ -86,8 +78,6 @@ void start()
 void* recv_thread(void* p){
     while(1){
         char buf[MAX_BUFFER_LEN] = {};
-        //发送的消息在发送那一端组织好
-        //只管接收就好
         if (recv(sock,buf,sizeof(buf),0) <=0){
             break;
         }

@@ -1,13 +1,22 @@
 #include "loghdr.h"
 #pragma comment (lib, "ws2_32.lib")  //加载 ws2_32.dll
-char myIP[20];
-int myPort;
-const int MAX_CLIENT_NUM=2;
+char servIP[20];
+int servPort;
+const int MAX_CLIENT_NUM=3;//最大客户端数量
 const int MAX_BUFFER_LEN = 1024;
 SOCKET servSock;
-SOCKET clntSockArr[MAX_CLIENT_NUM];
+SOCKET clntSockArr[MAX_CLIENT_NUM];//记录客户端socket数组
 time_t nowtime;
 struct sockaddr_in sockAddr;
+char clntip[MAX_CLIENT_NUM][20] = {};//记录客户端ip数组
+//用于将clntAddr.sin_addr.s_addr转换为字符串
+#define IP2UCHAR(addr) \
+((unsigned char *)&addr)[0], \
+((unsigned char *)&addr)[1], \
+((unsigned char *)&addr)[2], \
+((unsigned char *)&addr)[3]
+
+
 void init(){
     //初始化 DLL
     WSADATA wsaData;
@@ -16,35 +25,47 @@ void init(){
     servSock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     if(servSock==INVALID_SOCKET){
         perror("SERVER SOCKET INIT ERROR");
-        //exit(-1);
+        exit(-1);
     }
     //绑定套接字
     //输入IP和端口号
     printf("请输入IP地址：");
-    scanf("%s", myIP);
+    scanf("%s", servIP);
     printf("请输入端口号：");
-    scanf("%d", &myPort);
+    scanf("%d", &servPort);
     printf("\n");
     memset(&sockAddr, 0, sizeof(sockAddr));  //每个字节都用0填充
+    //init
     sockAddr.sin_family = PF_INET;
-    sockAddr.sin_addr.s_addr = inet_addr(myIP);
-    sockAddr.sin_port = htons(myPort);
-    if(bind(servSock, (SOCKADDR*)&sockAddr, sizeof(SOCKADDR))==-1)
+    sockAddr.sin_addr.s_addr = inet_addr(servIP);
+    sockAddr.sin_port = htons(servPort);
+    if(bind(servSock, (SOCKADDR*)&sockAddr, sizeof(SOCKADDR))==-1)//绑定
     {
         perror("BIND FAILED!");
         //exit(-1);
     }
-    if(listen(servSock, MAX_CLIENT_NUM)==-1)
+    if(listen(servSock, MAX_CLIENT_NUM)==-1)//监听
     {
         perror("LISTEN FAILED!");
         //exit(-1);
     }
-    // SOCKADDR clntAddr;
-    // int nSize = sizeof(SOCKADDR);
-    // clntSock = accept(servSock, (SOCKADDR*)&clntAddr, &nSize);
-    // if(clntSock==INVALID_SOCKET){
-    //     printf("CLIENT SOCKET INIT ERROR");
-    // }
+    //记录创建成功信息
+    char buf[MAX_BUFFER_LEN];
+	FILE *logs = fopen("log.txt", "a+");
+	if(logs== NULL)
+	{
+	printf("open file error: \n");
+	}else{
+    memset(buf,0,sizeof(buf));
+    char const *msg_serv_init = "****************************************************\n SERVER INIT SUCCESS";
+	sprintf(buf, "%s",msg_serv_init);
+    //为消息添加时间戳
+    addtimestamp(buf);
+	fputs(buf,logs);
+    //记录到日志
+    fputs("\n",logs);
+	fclose(logs);
+	}
 }
 void SendAll(char* msg){
     int i;
@@ -61,18 +82,19 @@ void SendAll(char* msg){
 			}else{
             memset(buf,0,sizeof(buf));
 			sprintf(buf, "%s",msg);
+            //为消息添加时间戳和用户ip
             addtimestamp(buf);
+            adduserip(buf,clntip[i]);
 			fputs(buf,logs);
             fputs("\n",logs);
 			fclose(logs);
-           
 			}
             send(clntSockArr[i],buf,strlen(buf),0);
         }
     }
 }
-void* serv_thread(void* p)
-{
+void* serv_thread(void* p)//为每个客户端创建一个线程处理
+{//服务端不输入消息，只管接收然后全部发出去
     int clientFd = *(int*)p;
     printf("pthread = %d\n",clientFd);
     while(1)
@@ -86,6 +108,7 @@ void* serv_thread(void* p)
                 if(clientFd==(int)clntSockArr[i])
                 {
                     clntSockArr[i]=0;
+                    memset(clntip[i],0,sizeof(clntip[i]));
                     break;
                 }
             }
@@ -96,7 +119,7 @@ void* serv_thread(void* p)
             {
                 printf("OPEN LOGFILE ERROR");
             }else{
-                sprintf(buf, "客户退出，IP地址：%s\n",myIP);
+                sprintf(buf, "IP：%s，PIF=%d退出了群聊",servIP,clientFd);
                 SendAll(buf);
             }
             pthread_exit(0);
@@ -109,7 +132,8 @@ void start()
 {
     printf("服务器启动成功\n");
     while(1){
-        SOCKADDR clntAddr;
+        //SOCKADDR clntAddr;
+        struct sockaddr_in clntAddr;
         int nSize = sizeof(SOCKADDR);
         SOCKET clntSock = accept(servSock, (SOCKADDR*)&clntAddr, &nSize);
         //调用accept进入堵塞状态，等待客户端的连接
@@ -122,6 +146,8 @@ void start()
         {
             if(clntSockArr[i]==0)
             {
+                memset(clntip[i],0,sizeof(clntip[i]));
+                sprintf(clntip[i], "%u.%u.%u.%u", IP2UCHAR(clntAddr.sin_addr.s_addr));
                 //用数组记录客户端socket
                 clntSockArr[i] =  clntSock;
                 printf("线程号= %d\n",(int)clntSock);
@@ -137,11 +163,6 @@ void start()
             closesocket(clntSock);
             }
         }
-        // char str[100];
-        // printf( "Enter a value :");
-        // scanf("%s", str);
-        // send(clntSock, str, strlen(str)+sizeof(char), NULL);
-        // printf( "\nYou entered: %s\n", str);
     }
     // closesocket(clntSock);
     closesocket(servSock);
