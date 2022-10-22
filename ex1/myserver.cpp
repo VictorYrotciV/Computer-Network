@@ -74,6 +74,8 @@ void SendAll(char* msg){
     int i;
     for (i = 0;i < MAX_CLIENT_NUM;i++){
         if (clntSockArr[i] != 0){
+            printf("SEND TO%d,NAME IS%s\n",clntSockArr[i],clntname[i]);
+			printf("MESSAGE IS: %s\n",msg);
 			//写入文件
 			char buf[MAX_BUFFER_LEN];
 			FILE *logs = fopen("log.txt", "a+");
@@ -101,8 +103,8 @@ void SendPriv(char* msg,char* destname,int originclntid){
     char buf[MAX_BUFFER_LEN];
     for (i = 0;i < MAX_CLIENT_NUM;i++){
         if (strcmp(destname,clntname[i])==0){
-            printf("发送给%d\n",clntSockArr[i]);
-			printf("发送的信息是: %s\n",msg);
+            printf("SEND TO%d,NAME IS%s\n",clntSockArr[i],clntname[i]);
+			printf("MESSAGE IS: %s\n",msg);
 			//写入文件
 			FILE *logs = fopen("log.txt", "a+");
 			if(logs== NULL)
