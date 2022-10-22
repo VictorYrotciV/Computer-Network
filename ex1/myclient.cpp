@@ -6,6 +6,9 @@ SOCKET sock;//实例化全局socket
 struct sockaddr_in sockAddr;
 int MAX_BUFFER_LEN = 1024;//消息缓冲区最大长度
 char name[20];//用户名
+char destname[20];//私聊目标用户名
+char mode[50];//由于私聊模式的协议定义，包含模式名长度、=、以及用户名长度
+
 time_t nowtime;//time
 void init()
 {
@@ -40,9 +43,15 @@ void init()
     printf("请输入用户名：");
     scanf("%s",name);
     printf("\n\n*****************************\n");
-    printf("欢迎%s 进入聊天！\n",name);
-    printf("输入 quit 以退出\n");
+    printf("*%s ：您已进入聊天\n",name);
+    printf("*输入 QUIT 以退出\n");
+    printf("*默认为广播模式（向所有人发送消息）\n");
+    printf("*输入 PRIVCHAT 以进入私聊模式\n");
+    printf("*输入 BROADCAST 以进入广播模式\n");
     printf("\n*****************************\n\n");
+    strcpy(mode,mode_bdcs);
+    //初始化模式为广播
+
 }
 void start()
 {
@@ -55,21 +64,36 @@ void start()
     memset(buf2,0,sizeof(buf2));
     sprintf(buf2,"欢迎%s进入群聊",name);
     addusername(buf2,name);
+    addusermode(buf2,mode);
     send(sock,buf2,strlen(buf2),0);
     while(1){//主线程，主要用来发送
     //接收服务器传回的数据
     //向服务器发送数据
         char buf[MAX_BUFFER_LEN] = {};
         scanf("%s",buf);
+        if(strcmp(buf,"QUIT")==0){//输入quit退出
+            //不用发quit消息，server的recv会检测到
+            break;
+        }else if(strcmp(buf,"PRIVCHAT")==0){
+            strcpy(mode,mode_priv);
+            printf("请输入您想私聊的用户名：");
+            scanf("%s",destname);
+            printf("请输入您要发送的消息\n");
+            strcat(mode,"=");
+            strcat(mode,destname);
+            continue;
+        }else if(strcmp(buf,"BROADCAST")==0){
+            strcpy(mode,mode_bdcs);
+            printf("请输入您要发送的消息\n");
+            continue;
+        }
         char msg[MAX_BUFFER_LEN] = {};
         sprintf(msg,"%s",buf);
         //在消息前端添加用户名，消息=[@名字]消息
         addusername(msg,name);
+        addusermode(msg,mode);
         send(sock,msg,strlen(msg),0);
-        if(strcmp(buf,"quit")==0){//输入quit退出
-            //不用发quit消息，server的recv会检测到
-            break;
-        }
+        
     }
     //关闭套接字
     closesocket(sock);

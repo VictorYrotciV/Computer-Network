@@ -1,6 +1,8 @@
 #include "loghdr.h"
 #pragma comment (lib, "ws2_32.lib")  //加载 ws2_32.dll
 char servIP[20];
+char usermode[50];//用户传过来的模式，对标myclient中的mode数组
+char name_for_priv_chat_dest[20];//私聊目标的名字
 int servPort;
 const int MAX_CLIENT_NUM=3;//最大客户端数量
 const int MAX_BUFFER_LEN = 1024;
@@ -9,6 +11,7 @@ SOCKET clntSockArr[MAX_CLIENT_NUM];//记录客户端socket数组
 time_t nowtime;
 struct sockaddr_in sockAddr;
 char clntip[MAX_CLIENT_NUM][20] = {};//记录客户端ip数组
+char clntname[MAX_CLIENT_NUM][22] = {};//记录客户端名字数组
 //用于将clntAddr.sin_addr.s_addr转换为字符串
 #define IP2UCHAR(addr) \
 ((unsigned char *)&addr)[0], \
@@ -71,8 +74,6 @@ void SendAll(char* msg){
     int i;
     for (i = 0;i < MAX_CLIENT_NUM;i++){
         if (clntSockArr[i] != 0){
-            printf("发送给%d\n",clntSockArr[i]);
-			printf("发送的信息是: %s\n",msg);
 			//写入文件
 			char buf[MAX_BUFFER_LEN];
 			FILE *logs = fopen("log.txt", "a+");
@@ -93,8 +94,51 @@ void SendAll(char* msg){
         }
     }
 }
+void SendPriv(char* msg,char* destname,int originclntid){
+    //参数分别为：消息、目标的用户名、源消息的发出客户的id
+    //即其存储的pthread的id，还能用于发送没找到消息
+    int i;
+    char buf[MAX_BUFFER_LEN];
+    for (i = 0;i < MAX_CLIENT_NUM;i++){
+        if (strcmp(destname,clntname[i])==0){
+            printf("发送给%d\n",clntSockArr[i]);
+			printf("发送的信息是: %s\n",msg);
+			//写入文件
+			FILE *logs = fopen("log.txt", "a+");
+			if(logs== NULL)
+			{
+			printf("open file error: \n");
+			}else{
+            memset(buf,0,sizeof(buf));
+			sprintf(buf, "%s",msg);
+            //为消息添加时间戳和用户ip
+            addtimestamp(buf);
+            adduserip(buf,clntip[i]);
+			fputs(buf,logs);
+            fputs("\n",logs);
+			fclose(logs);
+			}
+            send(clntSockArr[i],buf,strlen(buf),0);
+            send(clntSockArr[originclntid],buf,strlen(buf),0);
+            //发送方和接收方都显示私聊消息
+            return;
+        }
+    }
+    //到达这里表示没有找到目标用户名，向客户发送寻找失败消息
+    memset(buf,0,sizeof(buf));
+    sprintf(buf, "没有找到：%s。。。",destname);
+    char serv_name[10];
+    char serv_mode[20];
+    strcpy(serv_name,"server");
+    strcpy(serv_mode,"#SERVER");
+    addusername(buf,serv_name);
+    addusermode(buf,serv_mode);
+    addtimestamp(buf);
+    adduserip(buf,clntip[originclntid]);
+    send(clntSockArr[originclntid],buf,strlen(buf),0);
+}
 void* serv_thread(void* p)//为每个客户端创建一个线程处理
-{//服务端不输入消息，只管接收然后全部发出去
+{//服务端不命令行输入消息，只管接收然后全部发出去
     int clientFd = *(int*)p;
     printf("pthread = %d\n",clientFd);
     while(1)
@@ -107,25 +151,60 @@ void* serv_thread(void* p)//为每个客户端创建一个线程处理
             {
                 if(clientFd==(int)clntSockArr[i])
                 {
+                    printf("SOCKET=%d 退出了\n",clientFd);
+                    memset(buf,0,sizeof(buf));
+                    FILE *logs = fopen("log.txt","a");
+                    if(logs==NULL)
+                    {
+                        printf("OPEN LOGFILE ERROR");
+                    }else{
+                        sprintf(buf, "%s退出了群聊",clntname[i]);
+                        char serv_name[10];
+                        char serv_mode[20];
+                        strcpy(serv_name,"server");
+                        strcpy(serv_mode,"#SERVER");
+                        addusername(buf,serv_name);
+                        addusermode(buf,serv_mode);
+                        //不同于客户端发出的其他消息，带有用户名
+                        //这里是客户端退出后进行处理，客户端没有发消息
+                        //遵守协议，在这里加上服务器的名字和模式
+                        //代表从服务器发出，模式为服务器
+                        SendAll(buf);
+                    }
                     clntSockArr[i]=0;
                     memset(clntip[i],0,sizeof(clntip[i]));
+                    memset(clntname[i],0,sizeof(clntname[i]));
                     break;
                 }
             }
-            printf("SOCKET=%d 退出了\n",clientFd);
-            memset(buf,0,sizeof(buf));
-            FILE *logs = fopen("log.txt","a");
-            if(logs==NULL)
-            {
-                printf("OPEN LOGFILE ERROR");
-            }else{
-                sprintf(buf, "IP：%s，PIF=%d退出了群聊",servIP,clientFd);
-                SendAll(buf);
-            }
+            
             pthread_exit(0);
         }
         //把接收到的信息发送到所有客户端
-        SendAll(buf);
+        //接收到用户名消息是在链接之后
+        //客户端发送一个带用户名的消息
+        //要在这里解析
+        //*********************************************
+        //解析用户信息
+        //*********************************************
+        int i=0;
+        for(i=0;i<MAX_CLIENT_NUM;i++)
+        {
+            if(clientFd==(int)clntSockArr[i])
+            {
+                parseusername(clntname[i],buf);
+                printf("%s\n",clntname[i]);
+                break;
+            }
+        }
+        parseusermode(usermode,name_for_priv_chat_dest,buf);
+        if(strcmp(usermode,mode_bdcs)==0)
+        {
+            SendAll(buf);
+        }else if(strcmp(usermode,mode_priv)==0)
+        {
+            SendPriv(buf,name_for_priv_chat_dest,i);
+        }
     }
 }
 void start()
