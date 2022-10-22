@@ -28,7 +28,7 @@ void init(){
     servSock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     if(servSock==INVALID_SOCKET){
         perror("SERVER SOCKET INIT ERROR");
-        exit(-1);
+        exit(0);
     }
     //绑定套接字
     //输入IP和端口号

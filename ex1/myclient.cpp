@@ -70,7 +70,9 @@ void start()
     //接收服务器传回的数据
     //向服务器发送数据
         char buf[MAX_BUFFER_LEN] = {};
-        scanf("%s",buf);
+        //scanf("%s",buf);
+        gets(buf);
+        if(buf[0]=='\0'){continue;}
         if(strcmp(buf,"QUIT")==0){//输入quit退出
             //不用发quit消息，server的recv会检测到
             break;
