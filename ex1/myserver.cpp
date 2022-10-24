@@ -45,12 +45,12 @@ void init(){
     if(bind(servSock, (SOCKADDR*)&sockAddr, sizeof(SOCKADDR))==-1)//绑定
     {
         perror("BIND FAILED!");
-        //exit(-1);
+        exit(-1);
     }
     if(listen(servSock, MAX_CLIENT_NUM)==-1)//监听
     {
         perror("LISTEN FAILED!");
-        //exit(-1);
+        exit(-1);
     }
     //记录创建成功信息
     char buf[MAX_BUFFER_LEN];
