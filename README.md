@@ -23,3 +23,19 @@
 g++ .\myclient.cpp -lws2_32 -lpthread -fexec-charset=GBK -o myclient
 
 g++ .\myserver.cpp -lws2_32 -lpthread -fexec-charset=GBK -o myserver
+
+
+
+### ex3
+
+nodejs提前安装。
+
+demo为练习用的demo
+
+node_modules主要为npm安装好的express以及相关的主键。
+
+下面两个json文件是自动生成的
+
+主要程序在myex2中，www文件在myex2/bin/。
+
+命令行打开myex2文件夹，输入npm start开启服务器。
