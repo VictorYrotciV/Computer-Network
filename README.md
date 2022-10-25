@@ -26,7 +26,7 @@ g++ .\myserver.cpp -lws2_32 -lpthread -fexec-charset=GBK -o myserver
 
 
 
-### ex3
+### ex2
 
 nodejs提前安装。
 
