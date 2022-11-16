@@ -32,7 +32,7 @@ int ConnectWith3Handsks(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen
         u_short checksum_from_recv=header.checksum;
         header.checksum=0;
         calc_chksum_rst=CalcChecksum((u_short*)&header,sizeof(header));
-        if(header.flags==HSK1OF3&&calc_chksum_rst==checksum_from_recv)
+        if(header.flag==HSK1OF3&&calc_chksum_rst==checksum_from_recv)
         {
             printf("第一次握手接收成功\n");
             break;
@@ -43,7 +43,7 @@ int ConnectWith3Handsks(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen
     printf("第一次握手结束接收\n");
     //********************************************************************
     //send第二次握手
-    header.flags=HSK2OF3;
+    header.flag=HSK2OF3;
     calc_chksum_rst=CalcChecksum((u_short*)&header,sizeof(header));
     header.checksum=calc_chksum_rst;
     memcpy(buffer,&header,sizeof(header));
@@ -57,7 +57,7 @@ int ConnectWith3Handsks(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen
     while(recvfrom(servSock,buffer,sizeof(header),0,(sockaddr*)&clntAddr,&clntAddrLen)<=0){
         if(clock()-now_clocktime>MAX_TIME)
         {//超时重传
-            header.flags=HSK2OF3;
+            header.flag=HSK2OF3;
             header.checksum=0;
             calc_chksum_rst=CalcChecksum((u_short*)&header,sizeof(header));
             memcpy(&header,buffer,sizeof(header));
@@ -75,7 +75,7 @@ int ConnectWith3Handsks(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen
     u_short checksum_from_recv=temp1.checksum;
     temp1.checksum=0;
     calc_chksum_rst=CalcChecksum((u_short*)&temp1,sizeof(temp1));
-    if(temp1.flags==HSK3OF3&&calc_chksum_rst==checksum_from_recv)
+    if(temp1.flag==HSK3OF3&&calc_chksum_rst==checksum_from_recv)
     {
         printf("三次握手完成，已建立连接\n");
     }else{
@@ -84,12 +84,101 @@ int ConnectWith3Handsks(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen
     }
     return 1;
 }
-int DisconnectWith3Handsks(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen){
+
+int DisconnectWith4Waves(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen){
     HEADER header;
     u_short calc_chksum_rst;
     char* buffer = new char[sizeof(header)];
     //recvfrom(servSock,buffer,sizeof(header),0,(sockaddr*)&clntAddr,&clntAddrLen)
     //sendto(servSock,buffer,sizeof(header),0,(sockaddr*)&clntAddr, clntAddrLen)
+    //****************************************************************************
+    //recv第一次挥手
+    while(1)
+    {//肯定是服务端收到客户的FIN后才开始四次挥手的，第一次recv不重传，不用计时
+        if(recvfrom(servSock,buffer,sizeof(header),0,(sockaddr*)&clntAddr,&clntAddrLen)<0)
+        {
+            printf("第一次挥手接收错误\n");
+            return -1;
+        }
+        printf("第一次挥手接收了\n");
+        memcpy(&header,buffer,sizeof(header));
+        u_short checksum_from_recv=header.checksum;
+        header.checksum=0;
+        calc_chksum_rst=CalcChecksum((u_short*)&header,sizeof(header));
+        if(header.flag==WAV1OF4&&calc_chksum_rst==checksum_from_recv)
+        {
+            printf("第一次挥手接收成功\n");
+            break;
+        }else{
+            printf("校验码错误\n");
+        }
+    }
+    //*******************************************************
+    //send第二次挥手
+    header.checksum=0;
+    header.ack=header.SEQ+1;
+    //记录这里的ack=u+1，因为第三次挥手的ack=u+1，第四次挥手的seq=u+1
+    u_short ackin2ndwave=header.ack;
+    header.flag=WAV2OF4;
+    calc_chksum_rst=CalcChecksum((u_short*)&header,sizeof(header));
+    header.checksum=calc_chksum_rst;
+    memcpy(buffer,&header,sizeof(header));
+    if (sendto(servSock,buffer,sizeof(header),0,(sockaddr*)&clntAddr, clntAddrLen) == -1)
+    {
+        return -1;
+    }
+    printf("第二次挥手发送成功\n");
+    now_clocktime=clock();
+    //*******************************************************
+    //send第三次挥手
+    //这里ack等于第二次挥手的ack=u+1
+    header.checksum=0;
+    header.ack=ackin2ndwave;
+    //记录这里的seq=w，因为第四次挥手的ack=w+1
+    u_short seqin3rdwave=header.SEQ;
+    header.flag=WAV3OF4;
+    calc_chksum_rst=CalcChecksum((u_short*)&header,sizeof(header));
+    header.checksum=calc_chksum_rst;
+    memcpy(buffer,&header,sizeof(header));
+    if (sendto(servSock,buffer,sizeof(header),0,(sockaddr*)&clntAddr, clntAddrLen) == -1)
+    {
+        return -1;
+    }
+    printf("第三次挥手发送成功\n");
+    now_clocktime=clock();
+    //recv第四次握手
+    while(recvfrom(servSock,buffer,sizeof(header),0,(sockaddr*)&clntAddr,&clntAddrLen)<=0){
+        if(clock()-now_clocktime>MAX_TIME)
+        {//第三次挥手超时重传
+            header.ack=ackin2ndwave;
+            header.flag=WAV3OF4;
+            u_short seqin3rdwave=header.SEQ;
+            header.checksum=0;
+            calc_chksum_rst=CalcChecksum((u_short*)&header,sizeof(header));
+            memcpy(&header,buffer,sizeof(header));
+            if (sendto(servSock,buffer,sizeof(header),0,(sockaddr*)&clntAddr, clntAddrLen) == -1)
+            {
+                return -1;
+            }
+            now_clocktime=clock();
+            printf("第三次挥手超时，进行重传\n");
+        }
+    }
+    //校验
+    HEADER temp1;
+    memcpy(&temp1, buffer, sizeof(header));
+    u_short checksum_from_recv=temp1.checksum;
+    temp1.checksum=0;
+    calc_chksum_rst=CalcChecksum((u_short*)&temp1,sizeof(temp1));
+    if(temp1.flag==WAV4OF4&&(temp1.ack==seqin3rdwave+1)&&(temp1.SEQ=ackin2ndwave)&&calc_chksum_rst==checksum_from_recv)
+    {
+        printf("四次挥手完成，已断开连接\n");
+    }else{
+        printf("四次挥手错误\n");
+        return -1;
+    }
+    printf("四次挥手所有过程成功完成\n");
+    return 1;
 }
 void init(){
     //初始化DLL
@@ -130,7 +219,7 @@ void init(){
     // }
     int lenn=sizeof(sockAddr);
     ConnectWith3Handsks(servSock,sockAddr, lenn);
-
+    DisconnectWith4Waves(servSock,sockAddr, lenn);
     // char buf[MAX_BUFFER_LEN];
 	// FILE *logs = fopen("log.txt", "a+");
 	// if(logs== NULL)

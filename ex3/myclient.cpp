@@ -13,7 +13,8 @@ int ConnectWith3Handsks(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen
     char* buffer=new char[sizeof(header)];//头部初始化
     //********************************************************************
     //send第一次握手
-    header.flags=HSK1OF3;
+    header.checksum=0;
+    header.flag=HSK1OF3;
     calc_chksum_rst=CalcChecksum((u_short*)&header,sizeof(header));
     header.checksum=calc_chksum_rst;
     memcpy(buffer,&header,sizeof(header));
@@ -30,7 +31,7 @@ int ConnectWith3Handsks(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen
     {
         if (clock() - now_clocktime > MAX_TIME)//超时，重新传输第一次握手
         {//重传第一次握手
-            header.flags = HSK1OF3;
+            header.flag = HSK1OF3;
             header.checksum=0;
             header.checksum = CalcChecksum((u_short*)&header, sizeof(header));//计算校验和
             memcpy(buffer, &header, sizeof(header));//将首部放入缓冲区
@@ -45,7 +46,7 @@ int ConnectWith3Handsks(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen
     u_short checksum_from_recv=temp1.checksum;
     temp1.checksum=0;
     calc_chksum_rst=CalcChecksum((u_short*)&temp1,sizeof(temp1));
-    if(temp1.flags==HSK2OF3&&calc_chksum_rst==checksum_from_recv)
+    if(temp1.flag==HSK2OF3&&calc_chksum_rst==checksum_from_recv)
     {
         printf("二次握手完成，继续三次握手\n");
     }else{
@@ -54,7 +55,7 @@ int ConnectWith3Handsks(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen
     }
     //********************************************************************
     //send第三次握手
-    header.flags=HSK3OF3;
+    header.flag=HSK3OF3;
     header.checksum=0;
     calc_chksum_rst=CalcChecksum((u_short*)&header,sizeof(header));
     header.checksum=calc_chksum_rst;
@@ -66,8 +67,113 @@ int ConnectWith3Handsks(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen
     printf("三次握手发送成功\n");
     return 1;
 }
-int DisconnectWith3Handsks(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen){
-
+int DisconnectWith4Waves(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen){
+    HEADER header;
+    u_short calc_chksum_rst;
+    char* buffer = new char[sizeof(header)];
+    //记录第三次挥手seq=w，因为第四次挥手的ack=w+1
+    u_short seqin3rdwave;
+    u_short ackin2ndwave;
+    //********************************************************************
+    //send第一次握手
+    header.flag=WAV1OF4;
+    header.checksum=0;
+    calc_chksum_rst=CalcChecksum((u_short*)&header,sizeof(header));
+    header.checksum=calc_chksum_rst;
+    memcpy(buffer,&header,sizeof(header));
+    if (sendto(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, servAddrLen) <= 0)
+    {
+        printf("第一次挥手发送错误");
+        return -1;
+    }
+    printf("第一次挥手发送成功\n");
+    now_clocktime=clock();
+    //sock创建时自动设置阻塞模式，阻塞后不会重传
+    //这里要设置成非阻塞模式，iotclsocket的第三个参数非0
+    mode = 1;
+    ioctlsocket(clntSock, FIONBIO, &mode);
+    //********************************************************************
+    //recv第二次握手，需要则重传第一次握手
+    while (recvfrom(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, &servAddrLen) <= 0)
+    {
+        if (clock() - now_clocktime > MAX_TIME)//超时，重新传输第一次握手
+        {//重传第一次握手
+            header.flag = WAV1OF4;
+            header.checksum=0;
+            header.checksum = CalcChecksum((u_short*)&header, sizeof(header));//计算校验和
+            memcpy(buffer, &header, sizeof(header));//将首部放入缓冲区
+            sendto(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, servAddrLen);
+            now_clocktime = clock();
+            printf("第一次挥手超时，进行重传\n");
+        }
+    }
+    printf("第二次挥手接收数据\n");
+    HEADER temp1;
+    memcpy(&temp1, buffer, sizeof(header));
+    u_short checksum_from_recv=temp1.checksum;
+    temp1.checksum=0;
+    calc_chksum_rst=CalcChecksum((u_short*)&temp1,sizeof(temp1));
+    if(temp1.flag==WAV2OF4&&calc_chksum_rst==checksum_from_recv)
+    {
+        //记录这里的ack=u+1，因为第三次挥手的ack=u+1，第四次挥手的seq=u+1
+        ackin2ndwave=temp1.ack;
+        printf("二次挥完成，继续三次挥手\n");
+    }else{
+        printf("二次挥手传输有误，请重新连接\n");
+        return -1;
+    }
+    //********************************************************************
+    //recv第三次挥手
+    while (1)
+    {
+        if (recvfrom(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, &servAddrLen)<0)
+        {
+            printf("第三次挥手接收错误\n");
+            return -1;
+        }
+        memcpy(&header,buffer,sizeof(header));
+        u_short checksum_from_recv=header.checksum;
+        header.checksum=0;
+        calc_chksum_rst=CalcChecksum((u_short*)&header,sizeof(header));
+        if(header.flag==WAV3OF4&&header.ack==ackin2ndwave&&calc_chksum_rst==checksum_from_recv)
+        {
+            printf("第三次挥手接收成功\n");
+            //记录这里的seq=w，因为第四次挥手的ack=w+1
+            seqin3rdwave=header.SEQ;
+            break;
+        }else{
+            printf("第三次挥手校验错误\n");
+            return -1;
+        }
+    }
+    //********************************************************************
+    //send第四次挥手
+    header.flag=WAV4OF4;
+    header.ack=seqin3rdwave+1;
+    header.SEQ=ackin2ndwave;
+    header.checksum=0;
+    calc_chksum_rst=CalcChecksum((u_short*)&header,sizeof(header));
+    header.checksum=calc_chksum_rst;
+    memcpy(buffer,&header,sizeof(header));
+    if (sendto(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, servAddrLen) <= 0)
+    {
+        printf("第一次挥手发送错误");
+        return -1;
+    }
+    printf("第四次挥手发送成功\n");
+    now_clocktime=clock();
+    //第四次挥手后两个MSL后没有收到传回的信息，断开连接
+    while(recvfrom(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, &servAddrLen)<0)
+    {
+        if(clock()-now_clocktime>2*MAX_TIME)
+        {
+            return 1;
+        }
+    }
+    //如果到达这里，说明发送第四次挥手后又收到信息
+    //暂时不做处理，只退出，代表四次挥手错误
+    printf("四次挥手失败，因为第四次挥手后仍接到数据\n");
+    return -1;
 }
 void init()
 {
@@ -98,8 +204,9 @@ void init()
     int lenn=sizeof(sockAddr);
     
     if(ConnectWith3Handsks(sock,sockAddr, lenn)==-1){
-        printf("与客户端连接错误\n");
+        printf("与服务端连接错误\n");
     }
+    DisconnectWith4Waves(sock,sockAddr, lenn);
     // printf("客户端启动成功\n");
     // printf("连接到服务器，IP地址为%s，端口号为%d\n",servIP,servPort);
     // //初始化用户名

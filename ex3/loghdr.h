@@ -6,14 +6,15 @@
 #include <time.h>
 #include <string>
 using namespace std;
-time_t nowtime1;
 #define HSK1OF3 0x1 //SYN=1 ACK=0
 #define HSK2OF3 0x2 //SYN=0,ACK=1
 #define HSK3OF3 0x3 //SYN=1 ACK=1
 #define WAV1OF4 0x4 //SYN=0 ACK=0 FIN=1
-#define WAV2OF4 0x6 //SYN=0 ACK=1 FIN=1
+#define WAV2OF4 0x2 //SYN=0 ACK=1 FIN=0
 #define WAV3OF4 0x6 //SYN=0 ACK=1 FIN=1
-#define WAV4OF4 0x7 //SYN=0 ACK=0 FIN=1
+#define WAV4OF4 0x2 //SYN=0 ACK=1 FIN=0
+time_t nowtime1;
+u_long mode;
 const double MAX_TIME = 0.5 * CLOCKS_PER_SEC;
 struct HEADER
 {
@@ -23,13 +24,15 @@ struct HEADER
     //用一个unsigned char记录
     //使用低3位
     //分别是FIN ACK SYN
-    unsigned char flags=0;
+    unsigned char flag=0;
+    unsigned char ack=0;//确认序列号
     unsigned char SEQ=0;
     HEADER()
     {
         checksum=0;
         datasize=0;
-        flags=0;
+        flag=0;
+        ack=0;
         SEQ=0;
     }
 };
