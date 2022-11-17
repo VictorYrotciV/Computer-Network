@@ -2,6 +2,7 @@
 #pragma comment(lib, "ws2_32.lib")  //加载 ws2_32.dll
 char servIP[20];//服务端ip
 int servPort;//服务端端口号
+int clntSeq=0;
 SOCKET sock;//实例化全局socket
 SOCKADDR_IN sockAddr;
 clock_t now_clocktime;
@@ -25,8 +26,13 @@ int ConnectWith3Handsks(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen
     }
     printf("第一次握手发送成功\n");
     now_clocktime=clock();
+
     //********************************************************************
     //recv第二次握手
+    //sock创建时自动设置阻塞模式，阻塞后不会重传
+    //这里要设置成非阻塞模式，iotclsocket的第三个参数非0
+    mode = 1;
+    ioctlsocket(clntSock, FIONBIO, &mode);
     while (recvfrom(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, &servAddrLen) <= 0)
     {
         if (clock() - now_clocktime > MAX_TIME)//超时，重新传输第一次握手
@@ -174,6 +180,94 @@ int DisconnectWith4Waves(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLe
     //暂时不做处理，只退出，代表四次挥手错误
     printf("四次挥手失败，因为第四次挥手后仍接到数据\n");
     return -1;
+}
+int SendPkt(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen,char* pktData, int len, int &clntSeq){
+
+}
+int SendFile(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, char* fullData,int dataLen){
+    int pktnum=dataLen%MAX_BUFFER_SIZE==0?len/MAX_BUFFER_SIZE:len/MAX_BUFFER_SIZE+1;
+    int nowpkt=0;
+    long int tailpointer=0;//由于按包来传输，记录每次拼接后末尾的指针便于下一次拼接
+    HEADER header;
+    HEADER temp1;
+    u_short calc_chksum_rst;
+    char* buffer = new char[MAX_BUFFER_SIZE+sizeof(header)];
+    clntSeq=0;//初始化seq为0 
+    int pktlen=0;
+    while(1){
+        //make_pkt
+        header=HEADER();
+        if(nowpkt==pktnum-1){
+            //最后一个
+            pktlen=dataLen-(pktnum-1)*MAX_BUFFER_SIZE;
+        }else{
+            pktlen=MAX_BUFFER_SIZE;
+        }
+        header.datasize=pktlen;//此时pktlen为不加头部的大小
+        header.SEQ=clntSeq;
+        //其他均由构造函数初始化为0
+        char* nowPktPointer=fullData+nowpkt*MAX_BUFFER_SIZE;
+        memcpy(buffer,&header,sizeof(header));
+        memcpy(buffer+sizeof(header),nowPktPointer,sizeof(header)+pktlen);
+        calc_chksum_rst=CalcChecksum((u_short*)&buffer,sizeof(header)+pktlen);
+        header.checksum=calc_chksum_rst;
+        memcpy(buffer,&header,sizeof(header));
+        //udt_send
+        if(sendto(clntSock, buffer, sizeof(header)+pktlen, 0, (sockaddr*)&servAddr, servAddrLen)<0){
+            continue;
+        }
+        //**************************************************
+        //start_timer
+        u_long mode = 1;
+        ioctlsocket(socketClient, FIONBIO, &mode);
+        while(1){//外层循环，表示接收接收端返回的消息后是否因为有误继续recv
+            now_clocktime=clock();
+            
+            while(recvfrom(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, &servAddrLen)<0){
+                if(clock()-now_clocktime>MAX_TIME){
+                    //超时重传
+                    //udt_send,不用makepkt因为没变
+                    if(sendto(clntSock, buffer, sizeof(header)+pktlen, 0, (sockaddr*)&servAddr, servAddrLen)<0){
+                        return -1;
+                    }
+                    now_clocktime=clock();
+                }
+            }
+            //接收到了，进行校验，包括校验码和seq
+            //不对则继续外层循环，recv正确的
+            //接收端只返回一个header，
+            HEADER temp1;
+            memcpy(&temp1, buffer, sizeof(header));
+            u_short checksum_from_recv=temp1.checksum;
+            temp1.checksum=0;
+            calc_chksum_rst=CalcChecksum((u_short*)&temp1,sizeof(temp1));
+            if(calc_chksum_rst!=checksum_from_recv){continue;}//没continue则校验码通过，继续下一步
+            if(temp1.SEQ!=clntSeq){continue;}//没continue则序列号验证通过，执行需要步骤跳出循环即可
+            break;
+        }
+        u_long mode = 0;
+        ioctlsocket(socketClient, FIONBIO, &mode);
+        //至此一个pkt传输并验证成功，传输下一个
+        if(nowpkt==pktnum-1){break;}//所有包都传输完毕
+        //否则更新当前包和seq
+        nowpkt++;
+        clntSeq++;
+        if(clntSeq>255)
+        {
+            clntSeq=0;
+        }
+    }
+    //跳到这里则所有pkt发送成功，发送一个over的flag
+    header=HEADER();
+    header.flag=OVERFLAG;
+    header.checksum=0;
+    calc_chksum_rst=CalcChecksum((u_short*)&header,sizeof(header));
+    header.checksum=calc_chksum_rst;
+    memcpy(buffer,&header,sizeof(header));
+    if(sendto(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, servAddrLen)<0){
+        return -1;
+    }
+    return 1;
 }
 void init()
 {

@@ -13,6 +13,9 @@ using namespace std;
 #define WAV2OF4 0x2 //SYN=0 ACK=1 FIN=0
 #define WAV3OF4 0x6 //SYN=0 ACK=1 FIN=1
 #define WAV4OF4 0x2 //SYN=0 ACK=1 FIN=0
+#define OVERFLAG 0x8 //1000,OVER=1
+#define INITFLAG 0x0 //
+#define MAX_BUFFER_SIZE 1024 //最大缓冲区长度
 time_t nowtime1;
 u_long mode;
 const double MAX_TIME = 0.5 * CLOCKS_PER_SEC;
@@ -22,8 +25,9 @@ struct HEADER
     u_short datasize=0;
     //为把三个用到的flag“压缩”成三位
     //用一个unsigned char记录
-    //使用低3位
-    //分别是FIN ACK SYN
+    //使用低4位
+    //分别是OVER FIN ACK SYN
+    //其中over是指一个文件发送完毕后发送的标志位
     unsigned char flag=0;
     unsigned char ack=0;//确认序列号
     unsigned char SEQ=0;
