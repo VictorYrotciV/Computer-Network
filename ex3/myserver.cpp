@@ -192,6 +192,7 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
     char* buffer = new char[MAX_BUFFER_SIZE+sizeof(header)];
     servSeq=0;//初始化seq为0 
     //servACK=0;//初始时接收ACK0
+    printf("准备接收\n");
     while(1){
         //接收并放到缓冲区
         int recvLen=recvfrom(servSock,buffer,sizeof(header)+MAX_BUFFER_SIZE,0,(sockaddr*)&clntAddr,&clntAddrLen);
@@ -201,12 +202,13 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
             return -1;
         }
         printf("udp接收成功\n");
+        printf("%d\n",recvLen);
         printf("%d\n",recvLen-sizeof(header));
         memcpy(&header,buffer,sizeof(header));
         u_short checksum_from_recv=header.checksum;
         header.checksum=0;                                                                      
         memcpy(buffer,&header,sizeof(header));
-        calc_chksum_rst=CalcChecksum((u_short*)buffer,sizeof(header));
+        calc_chksum_rst=CalcChecksum((u_short*)buffer,recvLen);
         printf("%d\n",sizeof(buffer));
         if(calc_chksum_rst!=checksum_from_recv){printf("校验码校验失败\n");continue;}
         if(header.flag==OVERFLAG&&calc_chksum_rst==checksum_from_recv)
@@ -246,7 +248,8 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
                 if (sendto(servSock,buffer,sizeof(header),0,(sockaddr*)&clntAddr, clntAddrLen) == -1)
                 {
                     printf("发送错误\n");
-                    return -1;
+                    continue;
+                    //return -1;
                 }
                 servSeq++;
                 if(servSeq>255)//SEQ只有八位
@@ -267,21 +270,21 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
 
     }
     //这里应该接收到结束的flag，最后验证确认over则退出
-    now_clocktime=clock();
-    while(recvfrom(servSock,buffer,sizeof(header),0,(sockaddr*)&clntAddr,&clntAddrLen)<=0){
-        if(clock()-now_clocktime>5*MAX_TIME){//时间太久没收到就退出
-            return -1;
-        }
-        HEADER temp1;
-        memcpy(&temp1, buffer, sizeof(header));
-        u_short checksum_from_recv=temp1.checksum;
-        temp1.checksum=0;
-        calc_chksum_rst=CalcChecksum((u_short*)&temp1,sizeof(temp1));
-        if(calc_chksum_rst==checksum_from_recv&&temp1.flag==OVERFLAG){
-            return 1;
-        }
-        return -1;
-    }
+    // now_clocktime=clock();
+    // while(recvfrom(servSock,buffer,sizeof(header),0,(sockaddr*)&clntAddr,&clntAddrLen)<=0){
+    //     if(clock()-now_clocktime>5*MAX_TIME){//时间太久没收到就退出
+    //         return -1;
+    //     }
+    //     HEADER temp1;
+    //     memcpy(&temp1, buffer, sizeof(header));
+    //     u_short checksum_from_recv=temp1.checksum;
+    //     temp1.checksum=0;
+    //     calc_chksum_rst=CalcChecksum((u_short*)&temp1,sizeof(temp1));
+    //     if(calc_chksum_rst==checksum_from_recv&&temp1.flag==OVERFLAG){
+    //         return 1;
+    //     }
+    //     return -1;
+    // }
     // header=HEADER();
     // header.flag=OVERFLAG;
     // header.checksum=0;
@@ -304,7 +307,8 @@ void RecvFileHelper()
     printf("文件名接收完毕\n");
     int fileLen=RecvFile(servSock,sockAddr, lenn,filebuff);
     printf("文件接收完毕\n");
-    string namestr=filename;
+    string a="aa";
+    string namestr=a+filename;
     ofstream fout(namestr.c_str(),ofstream::binary);
     for(int i=0;i<fileLen;i++){fout<<filebuff[i];}
     fout.close();
@@ -327,8 +331,8 @@ void init(){
     // printf("请输入端口号：");
     // scanf("%d", &servPort);
     // printf("\n");
-    servPort=1234;
-    string myip="127.0.0.2";
+    servPort=4321;
+    string myip="127.1.2.3";
     char* ippointer=servIP;
     ippointer = strcpy(ippointer,myip.c_str());
     memset(&sockAddr, 0, sizeof(sockAddr));  //每个字节都用0填充

@@ -191,9 +191,11 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
     HEADER temp1;
     u_short calc_chksum_rst;
     char* buffer = new char[MAX_BUFFER_SIZE+sizeof(header)];
+    
     clntSeq=0;//初始化seq为0 
     int pktlen=0;
     while(1){
+        
         //make_pkt
         header=HEADER();
         if(nowpkt==pktnum-1){
@@ -208,15 +210,21 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
         header.flag=0;
         header.ack=0;
         //初始化为0
+        printf("%d\n",sizeof(header)+pktlen);
         char* nowPktPointer=fullData+nowpkt*MAX_BUFFER_SIZE;
         memcpy(buffer,&header,sizeof(header));
-        memcpy(buffer+sizeof(header),nowPktPointer,sizeof(header)+pktlen);
-        calc_chksum_rst=CalcChecksum((u_short*)buffer,sizeof(buffer));
+        memcpy(buffer+sizeof(header),nowPktPointer,pktlen);
+        printf("here1?\n");
+        calc_chksum_rst=CalcChecksum((u_short*)buffer,sizeof(header)+pktlen);
+        printf("here2?\n");
         header.checksum=calc_chksum_rst;
+        printf("here3?\n");
         memcpy(buffer,&header,sizeof(header));
+        
         // memcpy(buffer+sizeof(header),nowPktPointer,sizeof(header)+pktlen);
         printf("%d,%d,%d,%d\n",sizeof(buffer),sizeof(header),MAX_BUFFER_SIZE+sizeof(header),pktlen);
         //udt_send
+        
         if(sendto(clntSock, buffer, sizeof(header)+pktlen, 0, (sockaddr*)&servAddr, servAddrLen)<0){
             printf("udp发送错误\n");
             continue;
@@ -274,9 +282,9 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
     calc_chksum_rst=CalcChecksum((u_short*)&header,sizeof(header));
     header.checksum=calc_chksum_rst;
     memcpy(buffer,&header,sizeof(header));
-    if(sendto(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, servAddrLen)<0){
-        return -1;
-    }
+    sendto(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, servAddrLen);
+    mode = 0;
+    ioctlsocket(clntSock, FIONBIO, &mode);
     return 1;
 }
 void SendFileHelper()
@@ -286,7 +294,7 @@ void SendFileHelper()
     scanf("%s",filename);
     string filenamestr=filename;
     ifstream fin(filenamestr.c_str(),ifstream::binary);
-    char* filebuff=new char[INT_MAX];
+    char* filebuff=new char[10000000];
     int index=0;
     unsigned char nowbin;
     while(fin)
@@ -300,6 +308,7 @@ void SendFileHelper()
     int lenn=sizeof(sockAddr);
     SendFileAsBinary(sock,sockAddr,lenn,(char*)filenamestr.c_str(),filenamestr.length());
     printf("文件名发送完毕\n");
+    printf("%d\n",index);
     SendFileAsBinary(sock,sockAddr,lenn,filebuff,index);
     printf("文件发送完毕\n");
 }
@@ -320,8 +329,8 @@ void init()
     // printf("请输入端口号：");
     // scanf("%d", &servPort);
     // printf("\n");
-    servPort=1234;
-    string myip="127.0.0.2";
+    servPort=4321;
+    string myip="127.1.2.3";
     char* ippointer=servIP;
     ippointer = strcpy(ippointer,myip.c_str());
     memset(&sockAddr, 0, sizeof(sockAddr));  //每个字节都用0填充

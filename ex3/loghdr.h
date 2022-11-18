@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <WinSock2.h>
-#include <pthread.h>
 #include <time.h>
 #include <string>
 #include <fstream>
@@ -44,7 +43,8 @@ struct HEADER
 u_short CalcChecksum(u_short* bufin,int size)
 {
     int count = (size + 1) / 2;
-    u_short* buf = new u_short[size+1];
+    //u_short* buf = new u_short[size+1];
+    u_short* buf = (u_short*)malloc(size + 1);
     memset(buf, 0, size + 1);
     memcpy(buf, bufin, size);
     u_long sum = 0;
