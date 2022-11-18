@@ -194,23 +194,29 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
     //servACK=0;//初始时接收ACK0
     while(1){
         //接收并放到缓冲区
-        int recvLen=recvfrom(servSock,buffer,sizeof(header),0,(sockaddr*)&clntAddr,&clntAddrLen);
+        int recvLen=recvfrom(servSock,buffer,sizeof(header)+MAX_BUFFER_SIZE,0,(sockaddr*)&clntAddr,&clntAddrLen);
         if(recvLen<0)
         {
             printf("接收错误\n");
             return -1;
         }
+        printf("udp接收成功\n");
+        printf("%d\n",recvLen-sizeof(header));
         memcpy(&header,buffer,sizeof(header));
         u_short checksum_from_recv=header.checksum;
-        header.checksum=0;
-        calc_chksum_rst=CalcChecksum((u_short*)&buffer,sizeof(buffer));
+        header.checksum=0;                                                                      
+        memcpy(buffer,&header,sizeof(header));
+        calc_chksum_rst=CalcChecksum((u_short*)buffer,sizeof(header));
+        printf("%d\n",sizeof(buffer));
+        if(calc_chksum_rst!=checksum_from_recv){printf("校验码校验失败\n");continue;}
         if(header.flag==OVERFLAG&&calc_chksum_rst==checksum_from_recv)
         {
-            printf("文件接收完毕\n");
+            printf("所有文件接收完毕\n");
             break;
         }
         if(header.flag==INITFLAG&&calc_chksum_rst==checksum_from_recv)
         {//rdt_rcv(rcvpkt) && notcorrupt(rcvpkt) 
+            printf("校验码校验成功\n");
             if(servSeq!=int(header.SEQ))
             {//has_seq1(),重传，当前记录的应该的seq与收到的seq不同
                 //buffer不变，checksum不变，传回应该的seq
@@ -227,16 +233,18 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
                     printf("发送错误\n");
                     return -1;
                 }
+                printf("seq不对信息发送成功\n");
             }
             else
             {//has_seq0,发回正确的seq，更新服务端的seq
+                header=HEADER();
                 header.SEQ=(unsigned char)servSeq;
                 header.checksum=0;
                 calc_chksum_rst=CalcChecksum((u_short*)&header,sizeof(header));
                 header.checksum=calc_chksum_rst;
+                memcpy(buffer,&header,sizeof(header));
                 if (sendto(servSock,buffer,sizeof(header),0,(sockaddr*)&clntAddr, clntAddrLen) == -1)
                 {
-                    //如果接收正确，这里send的应该是不变的
                     printf("发送错误\n");
                     return -1;
                 }
@@ -286,6 +294,22 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
     // }
     return tailpointer;
 }
+void RecvFileHelper()
+{
+    char* filename=new char[10000];
+    char* filebuff=new char[INT_MAX];
+    int lenn=sizeof(sockAddr);
+    //发送端会发回文件名和文件的char数组
+    int nameLen=RecvFile(servSock,sockAddr, lenn,filename);
+    printf("文件名接收完毕\n");
+    int fileLen=RecvFile(servSock,sockAddr, lenn,filebuff);
+    printf("文件接收完毕\n");
+    string namestr=filename;
+    ofstream fout(namestr.c_str(),ofstream::binary);
+    for(int i=0;i<fileLen;i++){fout<<filebuff[i];}
+    fout.close();
+    printf("文件写入完毕\n");
+}
 void init(){
     //初始化DLL
     WSADATA wsaData;
@@ -325,6 +349,7 @@ void init(){
     // }
     int lenn=sizeof(sockAddr);
     ConnectWith3Handsks(servSock,sockAddr, lenn);
+    RecvFileHelper();
     DisconnectWith4Waves(servSock,sockAddr, lenn);
     // char buf[MAX_BUFFER_LEN];
 	// FILE *logs = fopen("log.txt", "a+");

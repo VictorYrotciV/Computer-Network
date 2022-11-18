@@ -181,11 +181,10 @@ int DisconnectWith4Waves(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLe
     printf("四次挥手失败，因为第四次挥手后仍接到数据\n");
     return -1;
 }
-int SendPkt(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen,char* pktData, int len, int &clntSeq){
-
-}
-int SendFile(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, char* fullData,int dataLen){
-    int pktnum=dataLen%MAX_BUFFER_SIZE==0?len/MAX_BUFFER_SIZE:len/MAX_BUFFER_SIZE+1;
+int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, char* fullData,int dataLen){
+    //int pktnum=dataLen%MAX_BUFFER_SIZE==0?dataLen/MAX_BUFFER_SIZE:dataLen/MAX_BUFFER_SIZE+1;
+    printf("%d\n",dataLen);
+    int pktnum=dataLen/MAX_BUFFER_SIZE+(dataLen%MAX_BUFFER_SIZE!=0);
     int nowpkt=0;
     long int tailpointer=0;//由于按包来传输，记录每次拼接后末尾的指针便于下一次拼接
     HEADER header;
@@ -204,35 +203,46 @@ int SendFile(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, char* ful
             pktlen=MAX_BUFFER_SIZE;
         }
         header.datasize=pktlen;//此时pktlen为不加头部的大小
-        header.SEQ=clntSeq;
-        //其他均由构造函数初始化为0
+        header.SEQ=(unsigned char)(clntSeq);
+        header.checksum=0;
+        header.flag=0;
+        header.ack=0;
+        //初始化为0
         char* nowPktPointer=fullData+nowpkt*MAX_BUFFER_SIZE;
         memcpy(buffer,&header,sizeof(header));
         memcpy(buffer+sizeof(header),nowPktPointer,sizeof(header)+pktlen);
-        calc_chksum_rst=CalcChecksum((u_short*)&buffer,sizeof(header)+pktlen);
+        calc_chksum_rst=CalcChecksum((u_short*)buffer,sizeof(buffer));
         header.checksum=calc_chksum_rst;
         memcpy(buffer,&header,sizeof(header));
+        // memcpy(buffer+sizeof(header),nowPktPointer,sizeof(header)+pktlen);
+        printf("%d,%d,%d,%d\n",sizeof(buffer),sizeof(header),MAX_BUFFER_SIZE+sizeof(header),pktlen);
         //udt_send
         if(sendto(clntSock, buffer, sizeof(header)+pktlen, 0, (sockaddr*)&servAddr, servAddrLen)<0){
+            printf("udp发送错误\n");
             continue;
         }
+        printf("udp发送成功\n");
         //**************************************************
         //start_timer
-        u_long mode = 1;
-        ioctlsocket(socketClient, FIONBIO, &mode);
+        
         while(1){//外层循环，表示接收接收端返回的消息后是否因为有误继续recv
             now_clocktime=clock();
-            
+            mode = 1;
+            ioctlsocket(clntSock, FIONBIO, &mode);
             while(recvfrom(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, &servAddrLen)<0){
                 if(clock()-now_clocktime>MAX_TIME){
                     //超时重传
                     //udt_send,不用makepkt因为没变
+                    printf("超时\n");
                     if(sendto(clntSock, buffer, sizeof(header)+pktlen, 0, (sockaddr*)&servAddr, servAddrLen)<0){
+                        printf("超时重传错误\n");
                         return -1;
                     }
+                    printf("超时重传\n");
                     now_clocktime=clock();
                 }
             }
+            printf("接收到回复信息，进行校验\n");
             //接收到了，进行校验，包括校验码和seq
             //不对则继续外层循环，recv正确的
             //接收端只返回一个header，
@@ -241,12 +251,12 @@ int SendFile(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, char* ful
             u_short checksum_from_recv=temp1.checksum;
             temp1.checksum=0;
             calc_chksum_rst=CalcChecksum((u_short*)&temp1,sizeof(temp1));
-            if(calc_chksum_rst!=checksum_from_recv){continue;}//没continue则校验码通过，继续下一步
+            if(calc_chksum_rst!=checksum_from_recv){printf("%u!=%u,回传校验码不通过\n",calc_chksum_rst,checksum_from_recv);continue;}//没continue则校验码通过，继续下一步
             if(temp1.SEQ!=clntSeq){continue;}//没continue则序列号验证通过，执行需要步骤跳出循环即可
             break;
         }
-        u_long mode = 0;
-        ioctlsocket(socketClient, FIONBIO, &mode);
+        mode = 0;
+        ioctlsocket(clntSock, FIONBIO, &mode);
         //至此一个pkt传输并验证成功，传输下一个
         if(nowpkt==pktnum-1){break;}//所有包都传输完毕
         //否则更新当前包和seq
@@ -268,6 +278,30 @@ int SendFile(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, char* ful
         return -1;
     }
     return 1;
+}
+void SendFileHelper()
+{
+    char* filename=new char[10000];
+    printf("输入您想发送的文件名\n");
+    scanf("%s",filename);
+    string filenamestr=filename;
+    ifstream fin(filenamestr.c_str(),ifstream::binary);
+    char* filebuff=new char[INT_MAX];
+    int index=0;
+    unsigned char nowbin;
+    while(fin)
+    {
+        nowbin=fin.get();
+        filebuff[index]=nowbin;
+        index++;
+    }
+    fin.close();
+    printf("文件读取成功\n");
+    int lenn=sizeof(sockAddr);
+    SendFileAsBinary(sock,sockAddr,lenn,(char*)filenamestr.c_str(),filenamestr.length());
+    printf("文件名发送完毕\n");
+    SendFileAsBinary(sock,sockAddr,lenn,filebuff,index);
+    printf("文件发送完毕\n");
 }
 void init()
 {
@@ -300,6 +334,7 @@ void init()
     if(ConnectWith3Handsks(sock,sockAddr, lenn)==-1){
         printf("与服务端连接错误\n");
     }
+    SendFileHelper();
     DisconnectWith4Waves(sock,sockAddr, lenn);
     // printf("客户端启动成功\n");
     // printf("连接到服务器，IP地址为%s，端口号为%d\n",servIP,servPort);

@@ -5,6 +5,7 @@
 #include <pthread.h>
 #include <time.h>
 #include <string>
+#include <fstream>
 using namespace std;
 #define HSK1OF3 0x1 //SYN=1 ACK=0
 #define HSK2OF3 0x2 //SYN=0,ACK=1
@@ -15,7 +16,7 @@ using namespace std;
 #define WAV4OF4 0x2 //SYN=0 ACK=1 FIN=0
 #define OVERFLAG 0x8 //1000,OVER=1
 #define INITFLAG 0x0 //
-#define MAX_BUFFER_SIZE 1024 //最大缓冲区长度
+const int MAX_BUFFER_SIZE=1024; //最大缓冲区长度
 time_t nowtime1;
 u_long mode;
 const double MAX_TIME = 0.5 * CLOCKS_PER_SEC;
