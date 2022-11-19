@@ -86,6 +86,7 @@ int DisconnectWith4Waves(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLe
     HEADER header;
     u_short calc_chksum_rst;
     char* buffer = new char[sizeof(header)];
+    
     //记录第三次挥手seq=w，因为第四次挥手的ack=w+1
     u_short seqin3rdwave;
     u_short ackin2ndwave;
@@ -211,7 +212,14 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
     HEADER temp1;
     u_short calc_chksum_rst;
     char* buffer = new char[MAX_BUFFER_SIZE+sizeof(header)];
-    
+    //需要记录上一个udp包以在序列号不对时回传
+    //用以下两个char数组来记录
+    //第一个包时，两个都记为第一个该发送的buffer
+    //下一个包时，将lst赋值为now，now赋值为当前计算出来该发送的buffer
+    // char* lstbuffer=new char[MAX_BUFFER_SIZE+sizeof(header)];
+    char* nowbuffer=new char[MAX_BUFFER_SIZE+sizeof(header)];
+    int flagforwrongseq=0;//为1时重传上一个包，详见下面注释说明
+    u_short checksum_from_recv1;
     clntSeq=0;//初始化seq为0 
     int pktlen=0;
     while(1){
@@ -235,6 +243,19 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
         calc_chksum_rst=CalcChecksum((u_short*)buffer,sizeof(header)+pktlen);
         header.checksum=calc_chksum_rst;
         memcpy(buffer,&header,sizeof(header));
+        memcpy(nowbuffer,&header,sizeof(header));
+        memcpy(nowbuffer+sizeof(header),nowPktPointer,pktlen);
+        // if(nowpkt==0)
+        // {
+        //     memcpy(nowbuffer,&header,sizeof(header));
+        //     memcpy(nowbuffer+sizeof(header),nowPktPointer,pktlen);
+        //     memcpy(lstbuffer,&header,sizeof(header));
+        //     memcpy(lstbuffer+sizeof(header),nowPktPointer,pktlen);
+        // }else{
+        //     memcpy(lstbuffer,nowbuffer,sizeof(header)+pktlen);
+        //     memcpy(nowbuffer,&header,sizeof(header));
+        //     memcpy(nowbuffer+sizeof(header),nowPktPointer,pktlen);
+        // }
         if(sendto(clntSock, buffer, sizeof(header)+pktlen, 0, (sockaddr*)&servAddr, servAddrLen)<0){
             printf("udp发送错误\n");
             addtolog("udp包发送错误",myippointer);
@@ -256,6 +277,14 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
                 if(clock()-now_clocktime>MAX_TIME){
                     //超时重传
                     //udt_send,不用makepkt因为没变
+                    //收到的buffer带校验码，用带校验码的算校验码，再传回去肯定错啊。。。
+                    //应该记录makepkt的结果这里发回去
+                    // if(sendto(clntSock, buffer, sizeof(header)+pktlen, 0, (sockaddr*)&servAddr, servAddrLen)<0){
+                    //     addtolog("确认消息超时，udp包重传发送错误",myippointer);
+                    //     printf("超时重传错误\n");
+                    //     return -1;
+                    // }
+                    memcpy(buffer,nowbuffer,sizeof(header)+pktlen);
                     if(sendto(clntSock, buffer, sizeof(header)+pktlen, 0, (sockaddr*)&servAddr, servAddrLen)<0){
                         addtolog("确认消息超时，udp包重传发送错误",myippointer);
                         printf("超时重传错误\n");
@@ -273,13 +302,29 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
             //接收端只返回一个header，
             HEADER temp1;
             memcpy(&temp1, buffer, sizeof(header));
-            u_short checksum_from_recv=temp1.checksum;
+            checksum_from_recv1=temp1.checksum;
             temp1.checksum=0;
             calc_chksum_rst=CalcChecksum((u_short*)&temp1,sizeof(temp1));
-            if(calc_chksum_rst!=checksum_from_recv){printf("%u!=%u,回传校验码不通过\n",calc_chksum_rst,checksum_from_recv);addtolog("确认信息校验码校验不通过",myippointer);continue;}//没continue则校验码通过，继续下一步
-            if(temp1.SEQ!=clntSeq){addtolog("确认信息序列号校验不通过",myippointer);continue;}//没continue则序列号验证通过，执行需要步骤跳出循环即可
+            if(calc_chksum_rst!=checksum_from_recv1){
+            printf("%u!=%u,回传校验码不通过\n",calc_chksum_rst,checksum_from_recv1);
+            addtolog("确认信息校验码校验不通过",myippointer);
+            continue;
+            }//没continue则校验码通过
+            if(temp1.SEQ!=clntSeq){
+                addtolog("确认信息序列号校验不通过",myippointer);
+                printf("%d!=%d,回传序列号不对\n",int(temp1.SEQ),clntSeq);
+                
+                //序列号不对，重传上一个
+                //这个也需要超时重传，想要continue回去，复用上面的代码
+                //设置一个flag,表示要重传上一个seq的包，这时重传上一个
+                //
+                flagforwrongseq=1;
+                continue;
+            }
             break;
         }
+        
+        //没continue则序列号验证通过，这些都通过代表发回的ack正确，否则重发当前包（continue）
         mode = 0;
         ioctlsocket(clntSock, FIONBIO, &mode);
         //至此一个pkt传输并验证成功，传输下一个
@@ -347,8 +392,10 @@ void init()
     if(sock==INVALID_SOCKET){
         printf("SOCKET INIT ERROR");
     }
-    servPort=4321;
-    string myip="127.1.2.3";
+    // servPort=4321;
+    // string myip="127.1.2.3";
+    servPort=6666;
+    string myip="127.7.8.9";
     char* ippointer=servIP;
     ippointer = strcpy(ippointer,myip.c_str());
     memset(&sockAddr, 0, sizeof(sockAddr));  //每个字节都用0填充

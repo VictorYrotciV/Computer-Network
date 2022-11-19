@@ -248,16 +248,19 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
         {//rdt_rcv(rcvpkt) && notcorrupt(rcvpkt) 
             addtolog("udp包校验码校验成功",myippointer);
             printf("校验码校验成功\n");
-            if(servSeq!=int(header.SEQ))
+            if(servSeq!=(int)header.SEQ)
             {//has_seq1(),重传，当前记录的应该的seq与收到的seq不同
-                //buffer不变，checksum不变，传回应该的seq
-                header.SEQ=(unsigned char)servSeq;
+                //buffer不变，checksum不变，传回当前的seq
+                unsigned char waitSEQ=header.SEQ;
+                header=HEADER();
+                header.SEQ=waitSEQ;
                 header.checksum=0;
                 //只传回一个header，不用传回数据
                 //也不用数据计算校验和，否则那边无法校验
                 //只需要seq
                 calc_chksum_rst=CalcChecksum((u_short*)&header,sizeof(header));
                 header.checksum=calc_chksum_rst;
+                memcpy(buffer,&header,sizeof(header));
                 //发回
                 if (sendto(servSock,buffer,sizeof(header),0,(sockaddr*)&clntAddr, clntAddrLen) == -1)
                 {
@@ -265,10 +268,11 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
                     return -1;
                 }
                 addtolog("SEQ值不正确，重新发送当前SEQ值成功",myippointer);
-                printf("seq不对信息发送成功\n");
+                printf("%d!=%d,seq不对信息发送成功\n",servSeq,waitSEQ);
             }
             else
             {//has_seq0,发回正确的seq，更新服务端的seq
+                addtolog("SEQ值验证正确",myippointer);
                 header=HEADER();
                 header.SEQ=(unsigned char)servSeq;
                 header.checksum=0;
@@ -358,25 +362,46 @@ void init(){
     //*************************
     myippointer=ippointer;
     addtolog("进入监听状态，等待连接",myippointer);
-    // if(listen(servSock, MAX_CLIENT_NUM)==-1)//监听
-    // {
-    //     perror("LISTEN FAILED!");
-    //     exit(-1);
-    // }
-    int lenn=sizeof(sockAddr);
-    if(ConnectWith3Handsks(servSock,sockAddr, lenn)<=0)
+    //******************************路由器****
+    char rterIP[20];
+    string routerip="127.7.8.9";
+    char* rterippointer=rterIP;
+    rterippointer = strcpy(rterippointer,routerip.c_str());
+
+	SOCKADDR_IN addrRouter;// 发送端IP和端口
+	memset(&addrRouter, 0, sizeof(SOCKADDR_IN));
+	addrRouter.sin_family = AF_INET; 
+	addrRouter.sin_addr.s_addr = inet_addr(rterIP); 
+	addrRouter.sin_port = htons(6666);
+    //*********************************************
+    int lenn=sizeof(addrRouter);
+    if(ConnectWith3Handsks(servSock,addrRouter, lenn)<=0)
     {
         addtolog("三次握手连接错误",myippointer);
         return;
     }
     addtolog("三次握手连接成功，返回值为1",myippointer);
     RecvFileHelper();
-    if(DisconnectWith4Waves(servSock,sockAddr, lenn)<=0)
+    if(DisconnectWith4Waves(servSock,addrRouter, lenn)<=0)
     {
         addtolog("四次挥手错误",myippointer);
         return;
     }
     addtolog("四次挥手断连成功，返回值为1",myippointer);
+    // int lenn=sizeof(sockAddr);
+    // if(ConnectWith3Handsks(servSock,sockAddr, lenn)<=0)
+    // {
+    //     addtolog("三次握手连接错误",myippointer);
+    //     return;
+    // }
+    // addtolog("三次握手连接成功，返回值为1",myippointer);
+    // RecvFileHelper();
+    // if(DisconnectWith4Waves(servSock,sockAddr, lenn)<=0)
+    // {
+    //     addtolog("四次挥手错误",myippointer);
+    //     return;
+    // }
+    // addtolog("四次挥手断连成功，返回值为1",myippointer);
     // char buf[MAX_BUFFER_LEN];
 	// FILE *logs = fopen("log.txt", "a+");
 	// if(logs== NULL)
