@@ -16,6 +16,7 @@ using namespace std;
 #define OVERFLAG 0x8 //1000,OVER=1
 #define INITFLAG 0x0 //
 const int MAX_BUFFER_SIZE=1024; //最大缓冲区长度
+const int MAX_MSG_SIZE=256;//最大日志消息长度
 time_t nowtime1;
 u_long mode;
 const double MAX_TIME = 0.5 * CLOCKS_PER_SEC;
@@ -56,4 +57,49 @@ u_short CalcChecksum(u_short* bufin,int size)
         }
     }
     return ~(sum & 0xffff);
+}
+
+//为消息添加时间戳
+void addtimestamp(char* msg)
+{
+    char msg2[1024];
+    memset(msg2,0,sizeof(msg2));
+    strcpy(msg2,msg);
+    memset(msg,0,sizeof(msg)); 
+    time(&nowtime1);
+    //ctime最后一个为换行符，将它替换，美观
+    char* timestamp = ctime(&nowtime1);
+    char *tmp = NULL;
+    if ((tmp = strstr(timestamp, "\n")))
+    {
+        *tmp = '\0';
+    }
+    sprintf(msg,"[%s]%s",timestamp,msg2);
+}
+//为消息添加字符串（用户ip地址）
+void adduserip(char* msg,char* ip)
+{
+    char msg2[1024];
+    memset(msg2,0,sizeof(msg2));
+    strcpy(msg2,msg);
+    memset(msg,0,sizeof(msg)); 
+    sprintf(msg,"[%s]%s",ip,msg2);
+}
+void addtolog(const char* initmsg,char* ip)
+{
+    FILE *logs = fopen("../log.txt", "a+");
+	if(logs== NULL)
+	{
+		printf("open file error: \n");
+	}else{
+        char buf[MAX_MSG_SIZE];
+        memset(buf,0,sizeof(buf));
+		sprintf(buf, "%s",initmsg);
+        //为消息添加时间戳和用户ip
+        addtimestamp(buf);
+        adduserip(buf,ip);
+		fputs(buf,logs);
+        fputs("\n",logs);
+		fclose(logs);
+		} 
 }
