@@ -22,8 +22,6 @@ u_long mode;
 const double MAX_TIME = 0.5 * CLOCKS_PER_SEC;
 struct HEADER
 {
-    u_short checksum=0;
-    u_short datasize=0;
     //为把三个用到的flag“压缩”成三位
     //用一个unsigned char记录
     //使用低4位
@@ -32,6 +30,8 @@ struct HEADER
     unsigned char flag=0;
     unsigned char ack=0;//确认序列号
     unsigned char SEQ=0;
+    u_short checksum=0;
+    u_short datasize=0;
     HEADER()
     {
         checksum=0;
@@ -44,8 +44,7 @@ struct HEADER
 u_short CalcChecksum(u_short* bufin,int size)
 {
     int count = (size + 1) / 2;
-    //u_short* buf = new u_short[size+1];
-    u_short* buf = (u_short*)malloc(size + 1);
+    u_short* buf = new u_short[size+1];
     memset(buf, 0, size + 1);
     memcpy(buf, bufin, size);
     u_long sum = 0;
@@ -85,9 +84,27 @@ void adduserip(char* msg,char* ip)
     memset(msg,0,sizeof(msg)); 
     sprintf(msg,"[%s]%s",ip,msg2);
 }
-void addtolog(const char* initmsg,char* ip)
+void addtoservlog(const char* initmsg,char* ip)
 {
-    FILE *logs = fopen("../log.txt", "a+");
+    FILE *logs = fopen("../servlog.txt", "a+");
+	if(logs== NULL)
+	{
+		printf("open file error: \n");
+	}else{
+        char buf[MAX_MSG_SIZE];
+        memset(buf,0,sizeof(buf));
+		sprintf(buf, "%s",initmsg);
+        //为消息添加时间戳和用户ip
+        addtimestamp(buf);
+        adduserip(buf,ip);
+		fputs(buf,logs);
+        fputs("\n",logs);
+		fclose(logs);
+		} 
+}
+void addtoclntlog(const char* initmsg,char* ip)
+{
+    FILE *logs = fopen("../clntlog.txt", "a+");
 	if(logs== NULL)
 	{
 		printf("open file error: \n");

@@ -23,11 +23,11 @@ int ConnectWith3Handsks(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen
     memcpy(buffer,&header,sizeof(header));
     if (sendto(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, servAddrLen) <= 0)
     {
-        addtolog("第一次握手发送错误",myippointer);
+        addtoclntlog("第一次握手发送错误",myippointer);
         printf("第一次握手发送错误");
         return -1;
     }
-    addtolog("第一次握手发送成功，开启计时器",myippointer);
+    addtoclntlog("第一次握手发送成功，开启计时器",myippointer);
     printf("第一次握手发送成功\n");
     now_clocktime=clock();
 
@@ -45,13 +45,13 @@ int ConnectWith3Handsks(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen
             header.checksum=0;
             header.checksum = CalcChecksum((u_short*)&header, sizeof(header));//计算校验和
             memcpy(buffer, &header, sizeof(header));//将首部放入缓冲区
-            if(sendto(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, servAddrLen)){addtolog("第一次握手超时重传发送错误",myippointer);return -1;}
+            if(sendto(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, servAddrLen)<0){addtoclntlog("第一次握手超时重传发送错误",myippointer);return -1;}
             now_clocktime = clock();
-            addtolog("第二次握手接收超时，第一次挥手重传发送成功",myippointer);
-            printf("第二次握手接收超时，第一次挥手进行重传\n");
+            addtoclntlog("第二次握手接收超时，第一次握手重传发送成功",myippointer);
+            printf("第二次握手接收超时，第一次握手进行重传\n");
         }
     }
-    addtolog("第二次握手接收成功，进行校验，关闭计时器",myippointer);
+    addtoclntlog("第二次握手接收成功，进行校验，关闭计时器",myippointer);
     printf("第二次握手接收成功，进行校验，关闭计时器\n");
     HEADER temp1;
     memcpy(&temp1, buffer, sizeof(header));
@@ -60,10 +60,10 @@ int ConnectWith3Handsks(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen
     calc_chksum_rst=CalcChecksum((u_short*)&temp1,sizeof(temp1));
     if(temp1.flag==HSK2OF3&&calc_chksum_rst==checksum_from_recv)
     {
-        addtolog("第二次握手校验成功",myippointer);
+        addtoclntlog("第二次握手校验成功",myippointer);
         printf("二次握手完成，继续三次握手\n");
     }else{
-        addtolog("二次握手校验有误，请重新连接",myippointer);
+        addtoclntlog("二次握手校验有误，请重新连接",myippointer);
         printf("二次握手传输有误，请重新连接\n");
         return -1;
     }
@@ -76,10 +76,10 @@ int ConnectWith3Handsks(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen
     memcpy(buffer,&header,sizeof(header));
     if (sendto(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, servAddrLen) <= 0)
     {
-        addtolog("第三次握手发送有误，请重新连接",myippointer);
+        addtoclntlog("第三次握手发送有误，请重新连接",myippointer);
         return -1;
     }
-    addtolog("第三次握手发送成功",myippointer);
+    addtoclntlog("第三次握手发送成功",myippointer);
     return 1;
 }
 int DisconnectWith4Waves(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen){
@@ -99,11 +99,11 @@ int DisconnectWith4Waves(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLe
     memcpy(buffer,&header,sizeof(header));
     if (sendto(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, servAddrLen) <= 0)
     {
-        addtolog("第一次挥手发送有误，请重新连接",myippointer);
+        addtoclntlog("第一次挥手发送有误，请重新连接",myippointer);
         printf("第一次挥手发送错误");
         return -1;
     }
-    addtolog("第一次挥手发送成功，开启计时器",myippointer);
+    addtoclntlog("第一次挥手发送成功，开启计时器",myippointer);
     printf("第一次挥手发送成功\n");
     now_clocktime=clock();
     //sock创建时自动设置阻塞模式，阻塞后不会重传
@@ -122,11 +122,11 @@ int DisconnectWith4Waves(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLe
             memcpy(buffer, &header, sizeof(header));//将首部放入缓冲区
             sendto(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, servAddrLen);
             now_clocktime = clock();
-            addtolog("第二次挥手接收超时，重传第一次挥手成功",myippointer);
+            addtoclntlog("第二次挥手接收超时，重传第一次挥手成功",myippointer);
             printf("第二次挥手接收超时，重传第一次挥手成功\n");
         }
     }
-    addtolog("第二次挥手接收成功，进行校验，关闭计时器",myippointer);
+    addtoclntlog("第二次挥手接收成功，进行校验，关闭计时器",myippointer);
     printf("第二次挥手接收成功，进行校验，关闭计时器\n");
     HEADER temp1;
     memcpy(&temp1, buffer, sizeof(header));
@@ -137,10 +137,10 @@ int DisconnectWith4Waves(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLe
     {
         //记录这里的ack=u+1，因为第三次挥手的ack=u+1，第四次挥手的seq=u+1
         ackin2ndwave=temp1.ack;
-        addtolog("第二次挥手校验成功",myippointer);
+        addtoclntlog("第二次挥手校验成功",myippointer);
         printf("第二次挥手校验成功\n");
     }else{
-        addtolog("第二次挥手校验成功",myippointer);
+        addtoclntlog("第二次挥手校验成功",myippointer);
         printf("二次挥手校验有误，请重新连接\n");
         return -1;
     }
@@ -152,7 +152,7 @@ int DisconnectWith4Waves(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLe
         {
             continue;
         }
-        addtolog("第三次挥手接收成功，进行校验",myippointer);
+        addtoclntlog("第三次挥手接收成功，进行校验",myippointer);
         memcpy(&header,buffer,sizeof(header));
         u_short checksum_from_recv=header.checksum;
         header.checksum=0;
@@ -160,7 +160,7 @@ int DisconnectWith4Waves(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLe
         if(header.flag==WAV3OF4&&header.ack==ackin2ndwave&&calc_chksum_rst==checksum_from_recv)
         {
             printf("第三次挥手校验成功\n");
-            addtolog("第三次挥手校验成功",myippointer);
+            addtoclntlog("第三次挥手校验成功",myippointer);
             //记录这里的seq=w，因为第四次挥手的ack=w+1
             seqin3rdwave=header.SEQ;
             break;
@@ -181,11 +181,11 @@ int DisconnectWith4Waves(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLe
     memcpy(buffer,&header,sizeof(header));
     if (sendto(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, servAddrLen) <= 0)
     {
-        addtolog("第四次挥手发送错误",myippointer);
+        addtoclntlog("第四次挥手发送错误",myippointer);
         printf("第四次挥手发送错误");
         return -1;
     }
-    addtolog("第四次挥手发送成功，开启计时器",myippointer);
+    addtoclntlog("第四次挥手发送成功，开启计时器",myippointer);
     printf("第四次挥手发送成功\n");
     now_clocktime=clock();
     //第四次挥手后两个MSL后没有收到传回的信息，断开连接
@@ -193,13 +193,13 @@ int DisconnectWith4Waves(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLe
     {
         if(clock()-now_clocktime>2*MAX_TIME)
         {
-            addtolog("第四次挥手后经2*MSL未收到数据，成功断开",myippointer);
+            addtoclntlog("第四次挥手后经2*MSL未收到数据，成功断开",myippointer);
             return 1;
         }
     }
     //如果到达这里，说明发送第四次挥手后又收到信息
     //暂时不做处理，只退出，代表四次挥手错误
-    addtolog("四次挥手失败，因为第四次挥手后仍接到数据",myippointer);
+    addtoclntlog("四次挥手失败，因为第四次挥手后仍接到数据",myippointer);
     printf("四次挥手失败，因为第四次挥手后仍接到数据\n");
     return -1;
 }
@@ -212,11 +212,7 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
     HEADER temp1;
     u_short calc_chksum_rst;
     char* buffer = new char[MAX_BUFFER_SIZE+sizeof(header)];
-    //需要记录上一个udp包以在序列号不对时回传
-    //用以下两个char数组来记录
-    //第一个包时，两个都记为第一个该发送的buffer
-    //下一个包时，将lst赋值为now，now赋值为当前计算出来该发送的buffer
-    // char* lstbuffer=new char[MAX_BUFFER_SIZE+sizeof(header)];
+    //重传记录
     char* nowbuffer=new char[MAX_BUFFER_SIZE+sizeof(header)];
     int flagforwrongseq=0;//为1时重传上一个包，详见下面注释说明
     u_short checksum_from_recv1;
@@ -258,19 +254,19 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
         // }
         if(sendto(clntSock, buffer, sizeof(header)+pktlen, 0, (sockaddr*)&servAddr, servAddrLen)<0){
             printf("udp发送错误\n");
-            addtolog("udp包发送错误",myippointer);
+            addtoclntlog("udp包发送错误",myippointer);
             continue;
         }
         memset(message,0,sizeof(message));
         sprintf(message,"成功发送 %d bytes数据，序列号为%d",pktlen,int(header.SEQ));
-        addtolog((const char*)message,myippointer);
-        addtolog("udp包发送成功",myippointer);
+        addtoclntlog((const char*)message,myippointer);
+        addtoclntlog("udp包发送成功",myippointer);
         printf("udp发送成功\n");
         //**************************************************
         //start_timer
-        
+        now_clocktime=clock();
         while(1){//外层循环，表示接收接收端返回的消息后是否因为有误继续recv
-            now_clocktime=clock();
+            
             mode = 1;
             ioctlsocket(clntSock, FIONBIO, &mode);
             while(recvfrom(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, &servAddrLen)<0){
@@ -286,16 +282,16 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
                     // }
                     memcpy(buffer,nowbuffer,sizeof(header)+pktlen);
                     if(sendto(clntSock, buffer, sizeof(header)+pktlen, 0, (sockaddr*)&servAddr, servAddrLen)<0){
-                        addtolog("确认消息超时，udp包重传发送错误",myippointer);
+                        addtoclntlog("确认消息超时，udp包重传发送错误",myippointer);
                         printf("超时重传错误\n");
                         return -1;
                     }
-                    addtolog("确认消息超时，udp包重传发送成功",myippointer);
+                    addtoclntlog("确认消息超时，udp包重传发送成功",myippointer);
                     printf("超时重传\n");
                     now_clocktime=clock();
                 }
             }
-            addtolog("接收到确认信息，进行校验",myippointer);
+            addtoclntlog("接收到确认信息，进行校验",myippointer);
             printf("接收到回复信息，进行校验\n");
             //接收到了，进行校验，包括校验码和seq
             //不对则继续外层循环，recv正确的
@@ -307,18 +303,14 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
             calc_chksum_rst=CalcChecksum((u_short*)&temp1,sizeof(temp1));
             if(calc_chksum_rst!=checksum_from_recv1){
             printf("%u!=%u,回传校验码不通过\n",calc_chksum_rst,checksum_from_recv1);
-            addtolog("确认信息校验码校验不通过",myippointer);
+            addtoclntlog("确认信息校验码校验不通过",myippointer);
             continue;
             }//没continue则校验码通过
             if(temp1.SEQ!=clntSeq){
-                addtolog("确认信息序列号校验不通过",myippointer);
+                addtoclntlog("确认信息序列号校验不通过",myippointer);
                 printf("%d!=%d,回传序列号不对\n",int(temp1.SEQ),clntSeq);
                 
-                //序列号不对，重传上一个
-                //这个也需要超时重传，想要continue回去，复用上面的代码
-                //设置一个flag,表示要重传上一个seq的包，这时重传上一个
-                //
-                flagforwrongseq=1;
+                
                 continue;
             }
             break;
@@ -328,7 +320,7 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
         mode = 0;
         ioctlsocket(clntSock, FIONBIO, &mode);
         //至此一个pkt传输并验证成功，传输下一个
-        addtolog("udp包确认信息校验通过，传输下一个包",myippointer);
+        addtoclntlog("udp包确认+信息校验通过，传输下一个包",myippointer);
         if(nowpkt==pktnum-1){break;}//所有包都传输完毕
         //否则更新当前包和seq
         nowpkt++;
@@ -339,7 +331,7 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
         }
     }
     //跳到这里则所有pkt发送成功，发送一个over的flag
-    addtolog("所有包发送完成，发送结束标志",myippointer);
+    addtoclntlog("所有包发送完成，发送结束标志",myippointer);
     header=HEADER();
     header.flag=OVERFLAG;
     header.checksum=0;
@@ -367,19 +359,20 @@ void SendFileHelper()
         filebuff[index]=nowbin;
         index++;
     }
+    index--;
     fin.close();
-    addtolog("文件读取成功",myippointer);
+    addtoclntlog("文件读取成功",myippointer);
     printf("文件读取成功\n");
     int lenn=sizeof(sockAddr);
     SendFileAsBinary(sock,sockAddr,lenn,(char*)filenamestr.c_str(),filenamestr.length());
     memset(message,0,sizeof(message));
     sprintf(message,"文件名:%s接收完毕",filename);
-    addtolog((const char*)message,myippointer);
+    addtoclntlog((const char*)message,myippointer);
     printf("文件名发送完毕\n");
     SendFileAsBinary(sock,sockAddr,lenn,filebuff,index);
     memset(message,0,sizeof(message));
     sprintf(message,"文件:%s接收完毕,长度为%dbytes",filename,index);
-    addtolog((const char*)message,myippointer);
+    addtoclntlog((const char*)message,myippointer);
     printf("文件发送完毕\n");
 }
 void init()
@@ -421,18 +414,18 @@ void init()
         perror("BIND FAILED!");
         exit(-1);
     }
-    addtolog("绑定套接字成功",myippointer);
+    addtoclntlog("绑定套接字成功",myippointer);
     if(ConnectWith3Handsks(sock,sockAddr, lenn)==-1){
-        addtolog("三次握手连接错误",myippointer);
+        addtoclntlog("三次握手连接错误",myippointer);
         return;
     }
-    addtolog("三次握手连接成功，返回值为1",myippointer);
+    addtoclntlog("三次握手连接成功，返回值为1",myippointer);
     SendFileHelper();
     if(DisconnectWith4Waves(sock,sockAddr, lenn)<0){
-        addtolog("四次挥手错误",myippointer);
+        addtoclntlog("四次挥手错误",myippointer);
         return;
     }
-    addtolog("四次挥手断连成功，返回值为1",myippointer);
+    addtoclntlog("四次挥手断连成功，返回值为1",myippointer);
     // printf("客户端启动成功\n");
     // printf("连接到服务器，IP地址为%s，端口号为%d\n",servIP,servPort);
     // //初始化用户名

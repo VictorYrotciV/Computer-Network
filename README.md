@@ -39,3 +39,39 @@ node_modules主要为npm安装好的express以及相关的主键。
 主要程序在myex2中，www文件在myex2/bin/。
 
 命令行打开myex2文件夹，输入npm start开启服务器。
+
+
+
+### ex3
+
+路由程序设置如下
+
+路由器ip：127.7.8.9 port：6666
+
+服务器ip：127.1.2.3 port：4321
+
+开始路由后
+
+打开test文件夹
+
+有两个txt文件，是客户端和服务端的日志文件，它们会在程序运行后根据情况更新
+
+可以提前清空
+
+任意顺序打开serv和clnt的两个exe文件，应该会握手成功
+
+成功后在clnt中输入文件名，可以是给定的四个测试文件，也可以自己给定，放在clnt的exe同级目录即可
+
+传输成功后，最后经过四次挥手自动断连
+
+可以在serv下找到传输过后的文件
+
+
+
+------------------------------------
+
+编译指令：
+
+g++ myserver.cpp -lws2_32 -fexec-charset=GBK -o test/serv/myserver.exe
+
+g++ myclient.cpp -lws2_32  -fexec-charset=GBK -o test/clnt/myclirnt.exe
