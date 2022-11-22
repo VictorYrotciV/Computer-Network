@@ -14,7 +14,7 @@ using namespace std;
 #define WAV3OF4 0x6 //SYN=0 ACK=1 FIN=1
 #define WAV4OF4 0x2 //SYN=0 ACK=1 FIN=0
 #define OVERFLAG 0x8 //1000,OVER=1
-#define INITFLAG 0x0 //
+#define INITFLAG 0 //
 const int MAX_BUFFER_SIZE=1024; //最大缓冲区长度
 const int MAX_MSG_SIZE=256;//最大日志消息长度
 const int WINDOW_SIZE=12;//窗口长度

@@ -98,6 +98,7 @@ int ConnectWith3Handsks(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen
         addtoservlog("三次握手完成，已建立连接",myippointer);
         printf("三次握手完成，已建立连接\n");
     }else{
+        if(temp1.flag!=HSK3OF3){printf("flag=%u,flag有误\n",temp1.flag);}
         addtoservlog("三次握手传输有误，请重新建立连接",myippointer);
         printf("三次握手传输有误，请重新建立连接\n");
         return -1;
@@ -171,7 +172,7 @@ int DisconnectWith4Waves(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLe
         addtoservlog("第三次挥手发送失败",myippointer);
         return -1;
     }
-    printf("第二次挥手发送成功\n");
+    printf("第三次挥手发送成功\n");
     addtoservlog("第三次挥手发送成功，开启计时器",myippointer);
     now_clocktime=clock();
     //recv第四次握手
@@ -261,6 +262,7 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
         if(header.flag==INITFLAG&&calc_chksum_rst==checksum_from_recv)
         {//rdt_rcv(rcvpkt) && notcorrupt(rcvpkt) 
             addtoservlog("udp包校验码校验成功",myippointer);
+            printf("接收到的校验和=%u，计算出的校验和为%u\n",checksum_from_recv,calc_chksum_rst);
             printf("校验码校验成功\n");
             //GBN协议中 seq不对直接丢弃即可
             //不用像停等协议一样超时重传
@@ -269,6 +271,7 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
                 addtoservlog("SEQ值验证正确",myippointer);
                 header=HEADER();
                 header.SEQ=(unsigned char)servSeq;
+                // header.flag=123;
                 header.checksum=0;
                 //sndpkt=makepkt(expextedseqnum)
                 //udt send
@@ -283,6 +286,8 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
                     continue;
                     //return -1;
                 }
+                printf("校验码和SEQ均校验成功，确认消息发送成功\n");
+                printf("发送的校验码=%d\n",calc_chksum_rst);
                 addtoservlog("校验码和SEQ均校验成功，确认消息发送成功",myippointer);
                 servSeq++;
                 if(servSeq>255)//SEQ只有八位

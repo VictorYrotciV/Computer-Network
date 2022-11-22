@@ -73,6 +73,7 @@ int ConnectWith3Handsks(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen
         addtoclntlog("第二次握手校验成功",myippointer);
         printf("二次握手完成，继续三次握手\n");
     }else{
+        if(temp1.flag!=HSK2OF3){printf("flag有误\n");}
         addtoclntlog("二次握手校验有误，请重新连接",myippointer);
         printf("二次握手传输有误，请重新连接\n");
         return -1;
@@ -152,12 +153,17 @@ int DisconnectWith4Waves(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLe
         addtoclntlog("第二次挥手校验成功",myippointer);
         printf("第二次挥手校验成功\n");
     }else{
-        addtoclntlog("第二次挥手校验成功",myippointer);
-        printf("二次挥手校验有误，请重新连接\n");
+        printf("flag=%u,seq=%u,checksum=%u\n",temp1.flag,temp1.SEQ,checksum_from_recv);
+        if(temp1.flag!=WAV2OF4){printf("flag=%u,flag不对\n",temp1.flag);}
+        if(calc_chksum_rst!=checksum_from_recv){printf("校验码不对\n");}
+        addtoclntlog("第二次挥手校验不成功",myippointer);
+        printf("二次挥手校验有误\n");
         return -1;
     }
     //********************************************************************
     //recv第三次挥手
+    mode = 0;
+    ioctlsocket(clntSock, FIONBIO, &mode);
     while (1)
     {
         if (recvfrom(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, &servAddrLen)<=0)
@@ -201,6 +207,8 @@ int DisconnectWith4Waves(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLe
     printf("第四次挥手发送成功\n");
     now_clocktime=clock();
     //第四次挥手后两个MSL后没有收到传回的信息，断开连接
+    mode = 1;
+    ioctlsocket(clntSock, FIONBIO, &mode);    
     while(recvfrom(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, &servAddrLen)<0)
     {
         if(clock()-now_clocktime>2*MAX_TIME)
@@ -219,6 +227,7 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
     int pktnum=dataLen%MAX_BUFFER_SIZE==0?dataLen/MAX_BUFFER_SIZE:dataLen/MAX_BUFFER_SIZE+1;
     //int pktnum=dataLen/MAX_BUFFER_SIZE+(dataLen%MAX_BUFFER_SIZE!=0);
     int nowpkt=0;
+    int recvtime=0;
     long int tailpointer=0;//由于按包来传输，记录每次拼接后末尾的指针便于下一次拼接
     HEADER header;
     HEADER temp1;
@@ -232,8 +241,14 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
     clntSeq=0;//初始化seq为0 
     int pktlen=0;
     while(1){
+        //**********************************************************
         //step 1 in GBN FSM
-        if(nextseqnum<base+256*basejwnum+WINDOW_SIZE){
+        if(nextseqnum<pktnum){
+            //如果“下一个”序列号等于包数
+            //而包数从0开始，实际上就是
+            //下一个序列号超过最大包数
+            //这时就不能再发，而是等待剩余的接收端ack
+        if(nextseqnum<base+256*basejwnum+WINDOW_SIZE){//&&nextseqnum<pktnum
             //make_pkt
             if(nextseqnum==pktnum-1){
                 //最后一个
@@ -256,6 +271,7 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
             memcpy(buffer,&header,sizeof(header));
             memcpy(nowbuffer,&header,sizeof(header));
             memcpy(nowbuffer+sizeof(header),nowPktPointer,pktlen);
+            printf("\n发送校验和=%d\n",calc_chksum_rst);
             //udt_send(sndpkt)
             if(sendto(clntSock, buffer, sizeof(header)+pktlen, 0, (sockaddr*)&servAddr, servAddrLen)<0){
             printf("udp发送错误\n");
@@ -275,8 +291,9 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
             if(base==nextseqnum%256){
                 now_clocktime=clock();
             }
-            //nextSeqnum++
-            if(nextseqnum==pktnum-1){break;}
+            //if(nextseqnum==pktnum-1){break;}
+            //直接break的话，实际上由于recv在send之后，send完但是没有recv完
+            //需要等到所有都recv完，即base=nextseqnum
             nextseqnum++;
             //remark 这里base是从header的seq复制下来的，应该只有0-255；
             //但如果你还没有注意到，那nextseqnum实际上并没有取余256
@@ -286,12 +303,14 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
             //     nextseqnum=0;
             // }
         }else{
+            //if(nextseqnum>=pktnum){break;}
             printf("base=%d,nextseqnum=%d\n",base,nextseqnum);
             printf("窗口过大，拒绝data\n");
         }
         //隐含条件：
         //else{refuse_data()}
-        
+        //**********************************************************
+        }
         
         
         
@@ -303,14 +322,13 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
             printf("接收到回复信息，进行校验\n");
             //接收到了，进行校验，包括校验码和seq
             //接收端只返回一个header，
-            HEADER temp1;
             memcpy(&temp1, buffer, sizeof(header));
             checksum_from_recv1=temp1.checksum;
             temp1.checksum=0;
             calc_chksum_rst=CalcChecksum((u_short*)&temp1,sizeof(temp1));
-            memset(message,0,sizeof(message));
-            sprintf(message,"接收到的校验和=%u，计算出的校验和为%u",checksum_from_recv1,calc_chksum_rst);
-            printf("%s\n",message);
+            // memset(message,0,sizeof(message));
+            // sprintf(message,"接收到的校验和=%u，计算出的校验和为%u",checksum_from_recv1,calc_chksum_rst);
+            // printf("%s\n",message);
             addtoclntlog((const char*)message,myippointer);
             if(calc_chksum_rst!=checksum_from_recv1){
                 //step 4 in GBN FSM
@@ -323,7 +341,9 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
             //到这里则接收并校验成功，执行FSM中的第三步
             if((int(temp1.SEQ)+1)%256<base){basejwnum++;}
             //seq+1为0-255，如果到了256要变回0
+            
             base=(int(temp1.SEQ)+1)%256;
+            printf("收到的校验码=%d,序列号seq=%d,base更新为%d\n",checksum_from_recv1,temp1.SEQ,base);
             if(base==nextseqnum%256)
             {
                 //TODO:stop_timer
@@ -333,8 +353,18 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
                 //和下面的超时重传即FSM中的timeout
                 //故回到原始状态，模式设为阻塞
                 //continue等待即可
-                printf("所有包验证完毕，继续发送\n");
-                continue;
+
+                //实际上需要判断，此时全部收完，那么就跳出，发送结束消息
+                //否则就是没有收完文件的所有包，但当前发送端已经发送的包
+                //已经ack完了
+                //继续发送，并等待ack
+                if(base+basejwnum*256==pktnum){break;}
+                else{
+                    printf("base=%d,nextseqnum=%d,pktnum=%d\n",base,nextseqnum,pktnum);
+                    printf("所有包验证完毕，继续发送\n");
+                    continue;
+                }
+                
                 
             }else{
                 now_clocktime=clock();
@@ -390,12 +420,18 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
                 }
             }
         }
+        
+        printf("nextseq=%d,pktnum=%d,base=%d\n",nextseqnum,pktnum,base);
+        if(base>=pktnum){
+            //本来用的是nextseqnum>=pktnum
+            break;
+        }
+        //**************************************************
         mode = 0;
         ioctlsocket(clntSock, FIONBIO, &mode);
-        //**************************************************
-        
     }
     //跳到这里则所有pkt发送成功，发送一个over的flag
+    printf("发送结束标志\n");
     addtoclntlog("所有包发送完成，发送结束标志",myippointer);
     header=HEADER();
     header.flag=OVERFLAG;
@@ -406,6 +442,7 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
     sendto(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, servAddrLen);
     mode = 0;
     ioctlsocket(clntSock, FIONBIO, &mode);
+    
     return 1;
 }
 void SendFileHelper()
