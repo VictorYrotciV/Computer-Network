@@ -17,7 +17,7 @@ using namespace std;
 #define INITFLAG 0 //
 const int MAX_BUFFER_SIZE=1024; //最大缓冲区长度
 const int MAX_MSG_SIZE=256;//最大日志消息长度
-const int WINDOW_SIZE=12;//窗口长度
+const int WINDOW_SIZE=64;//窗口长度
 time_t nowtime1;
 u_long mode;
 const double MAX_TIME = 0.5 * CLOCKS_PER_SEC;
