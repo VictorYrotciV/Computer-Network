@@ -237,6 +237,7 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
     char* nowbuffer=new char[MAX_BUFFER_SIZE+sizeof(header)];
     u_short checksum_from_recv1;
     base=0;
+    basejwnum=0;
     nextseqnum=0;
     clntSeq=0;//初始化seq为0 
     int pktlen=0;
