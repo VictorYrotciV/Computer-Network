@@ -18,7 +18,9 @@ char* myippointer;
 SOCKET sock;//实例化全局socket
 SOCKADDR_IN sockAddr;
 clock_t now_clocktime;
-
+//reno
+int lastSeq=0;
+int dupACKnum=0;
 //将sendfile中的一些变量放到全局，方便传入多线程
 int pktnum;
 int nowpkt;
@@ -252,6 +254,12 @@ int DisconnectWith4Waves(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLe
     return -1;
 }
 int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, char* fullData,int dataLen){
+    //reno
+    lastSeq=0;
+    dupACKnum=0;
+
+
+
     pktnum=dataLen%MAX_BUFFER_SIZE==0?dataLen/MAX_BUFFER_SIZE:dataLen/MAX_BUFFER_SIZE+1;
     //int pktnum=dataLen/MAX_BUFFER_SIZE+(dataLen%MAX_BUFFER_SIZE!=0);
     nowpkt=0;
@@ -441,6 +449,15 @@ void* client_recv_thread(void* p)
             if((int(temp1.SEQ)+1)%256<base){basejwnum++;}
             //seq+1为0-255，如果到了256要变回0
             
+
+            if(temp1.flag==DFTSNDPKT){addtoclntlog("收到dftsndpkt!",myippointer);}
+            if(lastSeq==temp1.SEQ){dupACKnum++;}else{dupACKnum=0;}
+            lastSeq=temp1.SEQ;
+            memset(message,0,sizeof(message));
+            sprintf(message,"[INFO]dupacknum=%d",dupACKnum);
+            printf("%s\n",message);
+            addtoclntlog((const char*)message,myippointer);
+
             base=(int(temp1.SEQ)+1)%256;
             memset(message,0,sizeof(message));
             sprintf(message,"[INFO]base变量更新=%d，实际的基序号base=%d",base,base+256*basejwnum);
@@ -489,8 +506,7 @@ void* client_recv_thread(void* p)
             //TODO 应把超时重传放到这里
             //step 2 in GBN FSM
             //timer开启时才有超时重传‘
-            if(timerIsOpen==0){continue;}
-            else{//timer开启
+            if(timerIsOpen!=0){//timer开启
             //timeout
             if(clock()-now_clocktime>MAX_TIME){
                 //timer开启，flag一定为1，不用更新flag，更新计时器即可
@@ -529,7 +545,7 @@ void* client_recv_thread(void* p)
                     continue;
                     }
                     memset(message,0,sizeof(message));
-                    sprintf(message,"[INFO][超时重传]成功发送 %d bytes数据，nextseqnum=%d",pktlen,nextseqnum);
+                    sprintf(message,"[INFO][超时重传]成功发送 %d bytes数据，重发的seq=%d,重发直至seq=nextseqnum=%d",pktlen,resend_index,nextseqnum);
                     printf("%s\n",message);
                     addtoclntlog((const char*)message,myippointer);
                     sprintf(message,"[INFO][超时重传]当前实际基序号base=%d，滑动窗口大小=%d",resend_index,nextseqnum-(base+256*basejwnum));

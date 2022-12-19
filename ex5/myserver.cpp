@@ -11,6 +11,7 @@ char message[100];
 clock_t now_clocktime;//这里用clock_t因为他能精确到ms，time_t只能精确到秒
 //用clock_t来计时，time_t用于时间戳的日志记录
 SOCKADDR_IN sockAddr;
+SOCKADDR_IN addrRouter;// 发送端IP和端口
 //用于将clntAddr.sin_addr.s_addr转换为字符串
 #define IP2UCHAR(addr) \
 ((unsigned char *)&addr)[0], \
@@ -40,6 +41,7 @@ struct pthread_para
     char* fullData;
 };
 //
+int thread_begin=0;
 int thread_end=0;
 int ConnectWith3Handsks(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen){
     HEADER header;
@@ -249,6 +251,7 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
     // make sndpkt
     servSeq=0;//初始化seq为0 
     sndpkt.SEQ=servSeq;
+    //sndpkt.flag=DFTSNDPKT;
     // u_short calc_chksum_rst;
     calc_chksum_rst=CalcChecksum((u_short*)&sndpkt,sizeof(sndpkt));
     sndpkt.checksum=calc_chksum_rst;
@@ -257,6 +260,7 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
     buffer = new char[MAX_BUFFER_SIZE+sizeof(header)];
     
     //servACK=0;//初始时接收ACK0
+    thread_begin=0;
     thread_end=0;
     addtoservlog("[MESG]准备接收文件",myippointer);
     printf("准备接收\n");
@@ -274,7 +278,8 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
         pthread_create(&id,0,server_send_thread,&(para));
 
     //**************************************************
-
+    mode = 0;
+    ioctlsocket(servSock, FIONBIO, &mode);
     while(1){
         
         //接收并放到缓冲区
@@ -292,6 +297,7 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
         addtoservlog((const char*)message,myippointer);
         printf("udp接收成功\n");
         memcpy(&header,buffer,sizeof(header));
+        printf("flag=%d\n",header.flag);
         u_short checksum_from_recv=header.checksum;
         header.checksum=0;                                                                      
         memcpy(buffer,&header,sizeof(header));
@@ -309,6 +315,12 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
             printf("所有文件接收完毕\n");
             break;
         }
+        // if(header.flag==DFTSNDPKT&&calc_chksum_rst==checksum_from_recv)
+        // {
+        //     //会接收到自己发来的dftsndpkt
+        //     //不知道怎么屏蔽，干脆加一个标志位
+        //     continue;
+        // }
         if(header.flag==INITFLAG&&calc_chksum_rst==checksum_from_recv)
         {//rdt_rcv(rcvpkt) && notcorrupt(rcvpkt) 
             addtoservlog("[MESG]udp包校验码校验成功",myippointer);
@@ -328,10 +340,12 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
                 //sndpkt=makepkt(expextedseqnum)
                 //udt send
                 //seq++
+                //header.flag=DFTSNDPKT;
                 calc_chksum_rst=CalcChecksum((u_short*)&header,sizeof(header));
                 header.checksum=calc_chksum_rst;
                 memcpy(buffer,&header,sizeof(header));
                 memcpy(&sndpkt,&header,sizeof(header));
+                
                 if (sendto(servSock,buffer,sizeof(header),0,(sockaddr*)&clntAddr, clntAddrLen) == -1)
                 {
                     printf("ack发送错误\n");
@@ -379,6 +393,7 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
         // addtoservlog("default sndpkt发送成功",myippointer);
     }
     thread_end=1;
+    printf("thread_end=%d\n",thread_end);
     return tailpointer;
 }
 void* server_send_thread(void* p)
@@ -392,21 +407,34 @@ void* server_send_thread(void* p)
     int& clntAddrLen=para->clntAddrLen;
     char* fullData=para->fullData;
     //default send
+
     while(1){
         if(thread_end==1){break;}
         else{
-        Sleep(100);
+        Sleep(1000);
         if(thread_end==1){break;}
+        //sndpkt.datasize=11451;
+        
+        sndpkt.flag=DFTSNDPKT;
+        sndpkt.checksum=0;
+        u_short calc_chksum_rst1=CalcChecksum((u_short*)&sndpkt,sizeof(sndpkt));
+        sndpkt.checksum=calc_chksum_rst1;
         memcpy(bufferp,&sndpkt,sizeof(sndpkt));
+        //sendto(servSock,buffer,sizeof(header),0,(sockaddr*)&clntAddr, clntAddrLen)
+        //sendto(servSock,buffer,sizeof(header),0,(sockaddr*)&clntAddr, clntAddrLen)
+        //recvfrom(servSock,buffer,sizeof(header)+MAX_BUFFER_SIZE,0,(sockaddr*)&clntAddr,&clntAddrLen)
         if (sendto(servSock,bufferp,sizeof(sndpkt),0,(sockaddr*)&clntAddr, clntAddrLen) == -1)
         {
+            if(thread_end==1){break;}
+            printf("thread_end等于%d\n",thread_end);
             printf("Default sndpkt发送错误\n");
             continue;
         }
         addtoservlog("default sndpkt发送成功",myippointer);
+        printf("default sndpkt发送成功\n");
         }
     }
-    thread_end=0;
+    
     pthread_exit((char *)"pthread exit!");
 }
 void RecvFileHelper()
@@ -416,12 +444,14 @@ void RecvFileHelper()
     int lenn=sizeof(sockAddr);
     //发送端会发回文件名和文件的char数组
     int namelen=0;
-    int nameLen=RecvFile(servSock,sockAddr, lenn,filename);
+    //int nameLen=RecvFile(servSock,sockAddr, lenn,filename);
+    int nameLen=RecvFile(servSock,addrRouter, lenn,filename);
     memset(message,0,sizeof(message));
     sprintf(message,"[MESG]文件名:%s接收完毕",filename);
     addtoservlog((const char*)message,myippointer);
     printf("%s\n",message);
-    int fileLen=RecvFile(servSock,sockAddr, lenn,filebuff);
+    //int fileLen=RecvFile(servSock,sockAddr, lenn,filebuff);
+    int fileLen=RecvFile(servSock,addrRouter, lenn,filebuff);
     memset(message,0,sizeof(message));
     sprintf(message,"[MESG]文件:%s接收完毕,长度为%dbytes",filename,fileLen);
     addtoservlog((const char*)message,myippointer);
@@ -470,7 +500,7 @@ void init(){
     char* rterippointer=rterIP;
     rterippointer = strcpy(rterippointer,routerip.c_str());
 
-	SOCKADDR_IN addrRouter;// 发送端IP和端口
+	
 	memset(&addrRouter, 0, sizeof(SOCKADDR_IN));
 	addrRouter.sin_family = AF_INET; 
 	addrRouter.sin_addr.s_addr = inet_addr(rterIP); 
