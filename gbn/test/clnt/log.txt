@@ -1,0 +1,78 @@
+
+[Sat Oct 22 17:35:53 2022]****************************************************
+ SERVER INIT SUCCESS
+[127.0.0.1][Sat Oct 22 17:36:00 2022][#BROADCAST][@pp]欢迎pp进入群聊
+[127.0.0.1][Sat Oct 22 17:36:06 2022][#SERVER][@server]没有找到：kk。。。
+[127.0.0.1][Sat Oct 22 17:36:15 2022][#SERVER][@server]pp退出了群聊
+[Sat Oct 22 18:05:21 2022]****************************************************
+ SERVER INIT SUCCESS
+[127.0.0.1][Sat Oct 22 18:05:37 2022][#BROADCAST][@psl]欢迎psl进入群聊
+[127.0.0.1][Sat Oct 22 18:05:59 2022][#BROADCAST][@yhz]欢迎yhz进入群聊
+[127.0.0.1][Sat Oct 22 18:05:59 2022][#BROADCAST][@yhz]欢迎yhz进入群聊
+[127.0.0.1][Sat Oct 22 18:06:14 2022][#BROADCAST][@myt]欢迎myt进入群聊
+[127.0.0.1][Sat Oct 22 18:06:14 2022][#BROADCAST][@myt]欢迎myt进入群聊
+[127.0.0.1][Sat Oct 22 18:06:14 2022][#BROADCAST][@myt]欢迎myt进入群聊
+[127.0.0.1][Sat Oct 22 18:06:30 2022][#BROADCAST][@psl]sb
+[127.0.0.1][Sat Oct 22 18:06:30 2022][#BROADCAST][@psl]sb
+[127.0.0.1][Sat Oct 22 18:06:30 2022][#BROADCAST][@psl]sb
+[127.0.0.1][Sat Oct 22 18:06:48 2022][#SERVER][@server]没有找到：ccc。。。
+[127.0.0.1][Sat Oct 22 18:06:57 2022][#SERVER][@server]yhz退出了群聊
+[127.0.0.1][Sat Oct 22 18:06:57 2022][#SERVER][@server]yhz退出了群聊
+[127.0.0.1][Sat Oct 22 18:06:57 2022][#SERVER][@server]yhz退出了群聊
+[127.0.0.1][Sat Oct 22 18:07:39 2022][#BROADCAST][@yhz]欢迎yhz进入群聊
+[127.0.0.1][Sat Oct 22 18:07:39 2022][#BROADCAST][@yhz]欢迎yhz进入群聊
+[127.0.0.1][Sat Oct 22 18:07:39 2022][#BROADCAST][@yhz]欢迎yhz进入群聊
+[127.0.0.1][Sat Oct 22 18:07:45 2022][#BROADCAST][@yhz]555 5 5 5 555 
+[127.0.0.1][Sat Oct 22 18:07:45 2022][#BROADCAST][@yhz]555 5 5 5 555 
+[127.0.0.1][Sat Oct 22 18:07:45 2022][#BROADCAST][@yhz]555 5 5 5 555 
+[127.0.0.1][Sat Oct 22 18:08:05 2022][#BROADCAST][@myt][]
+[127.0.0.1][Sat Oct 22 18:08:05 2022][#BROADCAST][@myt][]
+[127.0.0.1][Sat Oct 22 18:08:05 2022][#BROADCAST][@myt][]
+[127.0.0.1][Sat Oct 22 18:08:08 2022][#BROADCAST][@myt][][]][[[]]
+[127.0.0.1][Sat Oct 22 18:08:08 2022][#BROADCAST][@myt][][]][[[]]
+[127.0.0.1][Sat Oct 22 18:08:08 2022][#BROADCAST][@myt][][]][[[]]
+[127.0.0.1][Sat Oct 22 18:08:15 2022][#BROADCAST][@myt][
+[127.0.0.1][Sat Oct 22 18:08:15 2022][#BROADCAST][@myt][
+[127.0.0.1][Sat Oct 22 18:08:15 2022][#BROADCAST][@myt][
+[127.0.0.1][Sat Oct 22 18:08:16 2022][#BROADCAST][@myt]]
+[127.0.0.1][Sat Oct 22 18:08:16 2022][#BROADCAST][@myt]]
+[127.0.0.1][Sat Oct 22 18:08:16 2022][#BROADCAST][@myt]]
+[127.0.0.1][Sat Oct 22 18:08:17 2022][#BROADCAST][@myt] 
+[127.0.0.1][Sat Oct 22 18:08:17 2022][#BROADCAST][@myt] 
+[127.0.0.1][Sat Oct 22 18:08:17 2022][#BROADCAST][@myt] 
+[127.0.0.1][Sat Oct 22 18:08:29 2022][#BROADCAST][@myt] 
+[127.0.0.1][Sat Oct 22 18:08:29 2022][#BROADCAST][@myt] 
+[127.0.0.1][Sat Oct 22 18:08:29 2022][#BROADCAST][@myt] 
+[127.0.0.1][Sat Oct 22 18:08:33 2022][#BROADCAST][@myt]clear
+[127.0.0.1][Sat Oct 22 18:08:33 2022][#BROADCAST][@myt]clear
+[127.0.0.1][Sat Oct 22 18:08:33 2022][#BROADCAST][@myt]clear
+[127.0.0.1][Sat Oct 22 18:08:36 2022][#BROADCAST][@myt]wowowo1
+[127.0.0.1][Sat Oct 22 18:08:36 2022][#BROADCAST][@myt]wowowo1
+[127.0.0.1][Sat Oct 22 18:08:36 2022][#BROADCAST][@myt]wowowo1
+[127.0.0.1][Sat Oct 22 18:09:18 2022][#PRIVCHAT=myt][@myt]a1
+[127.0.0.1][Sat Oct 22 18:09:19 2022][#PRIVCHAT=myt][@myt]ada
+[127.0.0.1][Sat Oct 22 18:09:20 2022][#PRIVCHAT=myt][@myt]1da
+[127.0.0.1][Sat Oct 22 18:09:20 2022][#PRIVCHAT=myt][@myt]a
+[127.0.0.1][Sat Oct 22 18:09:39 2022][#PRIVCHAT=myt][@myt]PRIVCHAT8
+[127.0.0.1][Sat Oct 22 18:09:45 2022][#PRIVCHAT=myt][@myt]PRIVCHAT997
+[Sat Oct 22 18:29:26 2022]****************************************************
+ SERVER INIT SUCCESS
+[127.0.0.1][Sat Oct 22 18:30:00 2022][#BROADCAST][@pp]欢迎pp进入群聊
+[127.0.0.1][Sat Oct 22 18:30:00 2022][#BROADCAST][@pp]欢迎pp进入群聊
+[127.0.0.1][Sat Oct 22 18:30:12 2022][#BROADCAST][@qq]欢迎qq进入群聊
+[127.0.0.1][Sat Oct 22 18:30:12 2022][#BROADCAST][@qq]欢迎qq进入群聊
+[127.0.0.1][Sat Oct 22 18:30:23 2022][#BROADCAST][@bb]欢迎bb进入群聊
+[127.0.0.1][Sat Oct 22 18:30:23 2022][#BROADCAST][@bb]欢迎bb进入群聊
+[127.0.0.1][Sat Oct 22 18:30:23 2022][#BROADCAST][@bb]欢迎bb进入群聊
+[127.0.0.1][Sat Oct 22 18:30:34 2022][#BROADCAST][@pp]1234
+[127.0.0.1][Sat Oct 22 18:30:34 2022][#BROADCAST][@pp]1234
+[127.0.0.1][Sat Oct 22 18:30:34 2022][#BROADCAST][@pp]1234
+[127.0.0.1][Sat Oct 22 18:30:59 2022][#SERVER][@server]没有找到：qqqq。。。
+[127.0.0.1][Sat Oct 22 18:31:16 2022][#PRIVCHAT=qq][@pp]55555
+[127.0.0.1][Sat Oct 22 18:31:37 2022][#SERVER][@server]pp退出了群聊
+[127.0.0.1][Sat Oct 22 18:31:37 2022][#SERVER][@server]pp退出了群聊
+[127.0.0.1][Sat Oct 22 18:31:37 2022][#SERVER][@server]pp退出了群聊
+[127.0.0.1][Sat Oct 22 18:32:17 2022][#SERVER][@server]qq退出了群聊
+[127.0.0.1][Sat Oct 22 18:32:17 2022][#SERVER][@server]qq退出了群聊
+[Tue Nov 15 22:23:33 2022]****************************************************
+ SERVER INIT SUCCESS
