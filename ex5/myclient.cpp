@@ -1,5 +1,22 @@
 #include "loghdr.h"
 #pragma comment(lib, "ws2_32.lib")  //加载 ws2_32.dll
+//reno***********************
+#define SLOWSTART 0
+#define CONGAVOID 1
+#define FASTRECOV 2
+int renoState=0;
+int cwnd=1;
+int lastSeq=0;
+int dupACKnum=0;
+int ssthresh=WINDOW_SIZE;//一个缓冲区即数据段长度为1024，即1KB，WINDOWSIZE=64，恰好64KB
+
+//在拥塞避免中，new ack时需要cwnd=cwnd+mss*mss/cwnd
+//收到cwnd个ack后，cwnd+1，使其线性增长
+//即若cwnd=4，每收到四个段cwnd才+1
+//cwnd为整数，用一个全局变量，表示统计此时状态累积收到的cwnd数
+//每收到cwnd个，或状态转换到拥塞避免时清零
+int dupcwndnum=0;
+//***************************
 char servIP[20];//服务端ip
 int servPort;//服务端端口号
 int base=0;//FSM中的base
@@ -18,9 +35,7 @@ char* myippointer;
 SOCKET sock;//实例化全局socket
 SOCKADDR_IN sockAddr;
 clock_t now_clocktime;
-//reno
-int lastSeq=0;
-int dupACKnum=0;
+
 //将sendfile中的一些变量放到全局，方便传入多线程
 int pktnum;
 int nowpkt;
@@ -257,8 +272,9 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
     //reno
     lastSeq=0;
     dupACKnum=0;
-
-
+    cwnd=1;
+    ssthresh=WINDOW_SIZE;
+    renoState=SLOWSTART;//start with slowstart
 
     pktnum=dataLen%MAX_BUFFER_SIZE==0?dataLen/MAX_BUFFER_SIZE:dataLen/MAX_BUFFER_SIZE+1;
     //int pktnum=dataLen/MAX_BUFFER_SIZE+(dataLen%MAX_BUFFER_SIZE!=0);
@@ -304,7 +320,8 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
             //而包数从0开始，实际上就是
             //下一个序列号超过最大包数
             //这时就不能再发，而是等待剩余的接收端ack
-        if(nextseqnum<base+256*basejwnum+WINDOW_SIZE){//&&nextseqnum<pktnum
+        // if(nextseqnum<base+256*basejwnum+WINDOW_SIZE){//&&nextseqnum<pktnum
+        if(nextseqnum<base+256*basejwnum+cwnd){//&&nextseqnum<pktnum
             //make_pkt
             if(nextseqnum==pktnum-1){
                 //最后一个
@@ -372,7 +389,8 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
             printf("%s\n",message);
             addtoclntlog((const char*)message,myippointer);
             memset(message,0,sizeof(message));
-            sprintf(message,"[ERR ]最大窗口大小=%d,窗口过大，拒绝data",WINDOW_SIZE);
+            // sprintf(message,"[ERR ]最大窗口大小=%d,窗口过大，拒绝data",WINDOW_SIZE);
+            sprintf(message,"[ERR ]最大窗口大小=%d,窗口过大，拒绝data",cwnd);
             printf("%s\n",message);
             addtoclntlog((const char*)message,myippointer);
             printf("窗口过大，拒绝data\n");
@@ -445,13 +463,134 @@ void* client_recv_thread(void* p)
                 addtoclntlog("[ERR ]确认信息校验码校验不通过",myippointer);
                 continue;
             }
-            //到这里则接收并校验成功，执行FSM中的第三步
+            //到这里则接收并校验成功
             if((int(temp1.SEQ)+1)%256<base){basejwnum++;}
             //seq+1为0-255，如果到了256要变回0
-            
+            //**************************************
+            if(temp1.flag==DFTSNDPKT){addtoclntlog("[INFO]收到dftsndpkt!",myippointer);}
+            memset(message,0,sizeof(message));
+            sprintf(message,"[INFO]接收到的default andpkt 其SEQ=%d",temp1.SEQ);
+            printf("%s\n",message);
+            addtoclntlog((const char*)message,myippointer);
+            //reno****************************************
+            //got new ack or dup ack?
+            if(lastSeq==temp1.SEQ){//duplicate ack!
+            memset(message,0,sizeof(message));
+            sprintf(message,"[INFO]收到重复ack");
+            printf("%s\n",message);
+            addtoclntlog((const char*)message,myippointer);
+                if(renoState==SLOWSTART){
+                    dupACKnum++;
+                    if(dupACKnum==3){
+                        renoState=FASTRECOV;
+                        ssthresh=cwnd/2;
+                        cwnd=ssthresh+3;
+                        memset(message,0,sizeof(message));
+                        sprintf(message,"[INFO]慢启动阶段，duplicate ack=3");
+                        printf("%s\n",message);
+                        addtoclntlog((const char*)message,myippointer);
+                        memset(message,0,sizeof(message));
+                        sprintf(message,"[INFO]cwnd变为%d,ssthresh变为%d",cwnd,ssthresh);
+                        printf("%s\n",message);
+                        addtoclntlog((const char*)message,myippointer);
+                        //TODO:retransmit missing segment
+                        goto resend_missing_seg;
+                    } 
+                }
+                else if(renoState==CONGAVOID){
+                    dupACKnum++;
+                    if(dupACKnum==3){
+                        renoState=FASTRECOV;
+                        ssthresh=cwnd/2;
+                        cwnd=ssthresh+3;
+                        memset(message,0,sizeof(message));
+                        sprintf(message,"[INFO]拥塞避免阶段，duplicate ack=3");
+                        printf("%s\n",message);
+                        addtoclntlog((const char*)message,myippointer);
+                        memset(message,0,sizeof(message));
+                        sprintf(message,"[INFO]cwnd变为%d,ssthresh变为%d",cwnd,ssthresh);
+                        printf("%s\n",message);
+                        addtoclntlog((const char*)message,myippointer);
+                        //TODO:retransmit missing segment
+                        goto resend_missing_seg;
+                    }
+                }
+                else if(renoState==FASTRECOV){
+                    cwnd++;
+                    //cwnd更新，自动会传输新节
+                    memset(message,0,sizeof(message));
+                    sprintf(message,"[INFO]快速恢复阶段，收到重复ack");
+                    printf("%s\n",message);
+                    addtoclntlog((const char*)message,myippointer);
+                    memset(message,0,sizeof(message));
+                    sprintf(message,"[INFO]cwnd变为%d,ssthresh不变，为%d",cwnd,ssthresh);
+                    printf("%s\n",message);
+                    addtoclntlog((const char*)message,myippointer);
+                }
 
-            if(temp1.flag==DFTSNDPKT){addtoclntlog("收到dftsndpkt!",myippointer);}
-            if(lastSeq==temp1.SEQ){dupACKnum++;}else{dupACKnum=0;}
+            }else{//new ack!
+                memset(message,0,sizeof(message));
+                sprintf(message,"[INFO]收到新ack");
+                printf("%s\n",message);
+                addtoclntlog((const char*)message,myippointer);
+                dupACKnum=0;
+                if(renoState==SLOWSTART)
+                {
+                    cwnd=cwnd+1;//+1 MSS
+                    memset(message,0,sizeof(message));
+                    sprintf(message,"[INFO]慢启动，收到新ack");
+                    printf("%s\n",message);
+                    addtoclntlog((const char*)message,myippointer);
+                    memset(message,0,sizeof(message));
+                    sprintf(message,"[INFO]cwnd变为%d,ssthresh不变，为%d",cwnd,ssthresh);
+                    printf("%s\n",message);
+                    addtoclntlog((const char*)message,myippointer);
+                    if(cwnd>=ssthresh){
+                        memset(message,0,sizeof(message));
+                        sprintf(message,"[INFO]cwnd>=ssthresh，进入拥塞避免阶段");
+                        printf("%s\n",message);
+                        addtoclntlog((const char*)message,myippointer);
+                        renoState=CONGAVOID;
+                        dupcwndnum=0;
+                    }
+                    //cwnd更新，自动会传输新节
+                }
+                else if(renoState==CONGAVOID){
+                    //cwnd=cwnd+MSS*MSS/cwnd
+                    //收到cwnd个ack后，cwnd+1，使其线性增长
+                    dupcwndnum++;
+                    memset(message,0,sizeof(message));
+                    sprintf(message,"[INFO]拥塞避免阶段，收到新ack");
+                    printf("%s\n",message);
+                    addtoclntlog((const char*)message,myippointer);
+                    memset(message,0,sizeof(message));
+                    sprintf(message,"[INFO]当前阶段收到ack数为%d，cwnd=%d",dupcwndnum,cwnd);
+                    printf("%s\n",message);
+                    addtoclntlog((const char*)message,myippointer);
+                    if(dupcwndnum==cwnd)
+                    {
+                        cwnd++;
+                        memset(message,0,sizeof(message));
+                        sprintf(message,"[INFO]共收到cwnd=%d个ack，cwnd线性+1",cwnd-1);
+                        printf("%s\n",message);
+                        addtoclntlog((const char*)message,myippointer);
+                        dupcwndnum=0;
+                    }//cwnd更新，自动会传输新节
+                }
+                else if(renoState==FASTRECOV){
+                    renoState=CONGAVOID;
+                    dupcwndnum=0;
+                    cwnd=ssthresh;
+                    memset(message,0,sizeof(message));
+                    sprintf(message,"[INFO]快速恢复阶段，收到新ack");
+                    printf("%s\n",message);
+                    addtoclntlog((const char*)message,myippointer);
+                    memset(message,0,sizeof(message));
+                    sprintf(message,"[INFO]回到拥塞避免阶段，cwnd=ssthresh=%d",cwnd);
+                    printf("%s\n",message);
+                    addtoclntlog((const char*)message,myippointer);
+                }
+            }
             lastSeq=temp1.SEQ;
             memset(message,0,sizeof(message));
             sprintf(message,"[INFO]dupacknum=%d",dupACKnum);
@@ -506,11 +645,29 @@ void* client_recv_thread(void* p)
             //TODO 应把超时重传放到这里
             //step 2 in GBN FSM
             //timer开启时才有超时重传‘
-            if(timerIsOpen!=0){//timer开启
+            
             //timeout
             if(clock()-now_clocktime>MAX_TIME){
+                //reno****************************
+                //go back to slowstart
+                ssthresh=cwnd/2;
+                cwnd=1;
+                dupACKnum=0;
+                renoState=SLOWSTART;
+                memset(message,0,sizeof(message));
+                sprintf(message,"[ERR ]reno超时，回到慢启动阶段");
+                printf("%s\n",message);
+                addtoclntlog((const char*)message,myippointer);
+                memset(message,0,sizeof(message));
+                sprintf(message,"[INFO]ssthresh=cwnd/2=%d,cwnd=1MSS",cwnd);
+                printf("%s\n",message);
+                addtoclntlog((const char*)message,myippointer);
+                //********************************
+                if(timerIsOpen!=0){//timer开启
                 //timer开启，flag一定为1，不用更新flag，更新计时器即可
                 now_clocktime=clock();
+        //reno判断拥塞重传，goto这里
+        resend_missing_seg:
                 //base经过%256处理,但nextseqnum没有
                 int resend_index=base+256*basejwnum;
                 //通过状态机可知，从base到nextseqnum-1
@@ -545,16 +702,16 @@ void* client_recv_thread(void* p)
                     continue;
                     }
                     memset(message,0,sizeof(message));
-                    sprintf(message,"[INFO][超时重传]成功发送 %d bytes数据，重发的seq=%d,重发直至seq=nextseqnum=%d",pktlen,resend_index,nextseqnum);
+                    sprintf(message,"[INFO][重传]成功发送 %d bytes数据，重发的seq=%d,重发直至seq=nextseqnum=%d",pktlen,resend_index,nextseqnum);
                     printf("%s\n",message);
                     addtoclntlog((const char*)message,myippointer);
-                    sprintf(message,"[INFO][超时重传]当前实际基序号base=%d，滑动窗口大小=%d",resend_index,nextseqnum-(base+256*basejwnum));
+                    sprintf(message,"[INFO][重传]当前实际基序号base=%d，滑动窗口大小=%d",resend_index,nextseqnum-(base+256*basejwnum));
                     printf("%s\n",message);
                     addtoclntlog((const char*)message,myippointer);
-                    sprintf(message,"[INFO][超时重传]发送UDP包的校验和checksum=%u，伪首部的8位SEQ=%d",calc_chksum_rst,int(header.SEQ));
+                    sprintf(message,"[INFO][重传]发送UDP包的校验和checksum=%u，伪首部的8位SEQ=%d",calc_chksum_rst,int(header.SEQ));
                     printf("%s\n",message);
                     addtoclntlog((const char*)message,myippointer);
-                    addtoclntlog("[MESG][超时重传]UDP包发送成功",myippointer);
+                    addtoclntlog("[MESG][重传]UDP包发送成功",myippointer);
                     
                 }
             }

@@ -19,6 +19,8 @@ SOCKADDR_IN addrRouter;// 发送端IP和端口
 ((unsigned char *)&addr)[2], \
 ((unsigned char *)&addr)[3]
 
+
+
 //将sendfile中的一些变量放到全局，方便传入多线程
 long int tailpointer;//由于按包来传输，记录每次拼接后末尾的指针便于下一次拼接
 HEADER header;
@@ -251,7 +253,7 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
     // make sndpkt
     servSeq=0;//初始化seq为0 
     sndpkt.SEQ=servSeq;
-    //sndpkt.flag=DFTSNDPKT;
+    sndpkt.flag=DFTSNDPKT;
     // u_short calc_chksum_rst;
     calc_chksum_rst=CalcChecksum((u_short*)&sndpkt,sizeof(sndpkt));
     sndpkt.checksum=calc_chksum_rst;
@@ -268,14 +270,15 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
     //**************************************************
         //pthread
         //initiaize pthread params
-        struct pthread_para para;
-        para.servSock=servSock;
-        para.clntAddr=clntAddr;
-        para.clntAddrLen=clntAddrLen;
-        para.fullData=fullData;
-        pthread_t id;
-        void* server_send_thread(void*);
-        pthread_create(&id,0,server_send_thread,&(para));
+
+        // struct pthread_para para;
+        // para.servSock=servSock;
+        // para.clntAddr=clntAddr;
+        // para.clntAddrLen=clntAddrLen;
+        // para.fullData=fullData;
+        // pthread_t id;
+        // void* server_send_thread(void*);
+        // pthread_create(&id,0,server_send_thread,&(para));
 
     //**************************************************
     mode = 0;
@@ -308,19 +311,34 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
         sprintf(message,"[INFO]接收到的校验和=%u，计算出的校验和=%u",checksum_from_recv,calc_chksum_rst);
         printf("接收到的seq=%d\n",header.SEQ);
         addtoservlog((const char*)message,myippointer);
-        if(calc_chksum_rst!=checksum_from_recv){printf("校验码校验失败\n");addtoservlog("[ERR ]udp包校验码校验失败",myippointer);continue;}
+        if(calc_chksum_rst!=checksum_from_recv){
+            printf("校验码校验失败\n");addtoservlog("[ERR ]udp包校验码校验失败",myippointer);
+            memset(message,0,sizeof(message));
+            printf("不能正确接收与验证，发送default sndpkt，seq=%d",servSeq);
+            sprintf(message,"[INFO]不能正确接收与验证，发送default sndpkt，seq=%d",servSeq);
+            addtoservlog((const char*)message,myippointer);
+            while(1)
+            {
+                memcpy(buffer,&sndpkt,sizeof(sndpkt));
+                if (sendto(servSock,buffer,sizeof(sndpkt),0,(sockaddr*)&clntAddr, clntAddrLen) == -1)
+                {
+                    addtoservlog("[ERR ]default sndpkt发送错误",myippointer);
+                    printf("Default sndpkt发送错误\n");
+                    continue;
+                }
+                else break;
+            }
+            addtoservlog("[INFO]default sndpkt发送成功",myippointer);
+            printf("Default sndpkt发送成功\n");
+            continue;
+        }
         if(header.flag==OVERFLAG&&calc_chksum_rst==checksum_from_recv)
         {
             addtoservlog("[MESG]收到结束标志，所有文件接收完毕",myippointer);
             printf("所有文件接收完毕\n");
             break;
         }
-        // if(header.flag==DFTSNDPKT&&calc_chksum_rst==checksum_from_recv)
-        // {
-        //     //会接收到自己发来的dftsndpkt
-        //     //不知道怎么屏蔽，干脆加一个标志位
-        //     continue;
-        // }
+        
         if(header.flag==INITFLAG&&calc_chksum_rst==checksum_from_recv)
         {//rdt_rcv(rcvpkt) && notcorrupt(rcvpkt) 
             addtoservlog("[MESG]udp包校验码校验成功",myippointer);
@@ -345,7 +363,12 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
                 header.checksum=calc_chksum_rst;
                 memcpy(buffer,&header,sizeof(header));
                 memcpy(&sndpkt,&header,sizeof(header));
-                
+                //********************************
+                sndpkt.flag=DFTSNDPKT;
+                sndpkt.checksum=0;
+                calc_chksum_rst=CalcChecksum((u_short*)&sndpkt,sizeof(sndpkt));
+                sndpkt.checksum=calc_chksum_rst;
+                //*********************************
                 if (sendto(servSock,buffer,sizeof(header),0,(sockaddr*)&clntAddr, clntAddrLen) == -1)
                 {
                     printf("ack发送错误\n");
@@ -381,6 +404,23 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
             }else{
                 printf("服务器supposed seq=%d,接收到seq=%d\n",servSeq,(int)header.SEQ);
                 addtoservlog("[ERR ]seq值不对应，丢弃当前包",myippointer);
+                memset(message,0,sizeof(message));
+                printf("不能正确接收与验证，发送default sndpkt，seq=%d",servSeq);
+                sprintf(message,"[INFO]不能正确接收与验证，发送default sndpkt，seq=%d",servSeq);
+                addtoservlog((const char*)message,myippointer);
+                while(1)
+                {
+                    memcpy(buffer,&sndpkt,sizeof(sndpkt));
+                    if (sendto(servSock,buffer,sizeof(sndpkt),0,(sockaddr*)&clntAddr, clntAddrLen) == -1)
+                    {
+                        addtoservlog("[ERR ]default sndpkt发送错误",myippointer);
+                        printf("Default sndpkt发送错误\n");
+                        continue;
+                    }
+                    else break;
+                }
+                addtoservlog("[INFO]default sndpkt发送成功",myippointer);
+                printf("Default sndpkt发送成功\n");
             }
             
         }
@@ -392,8 +432,8 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
         // }
         // addtoservlog("default sndpkt发送成功",myippointer);
     }
-    thread_end=1;
-    printf("thread_end=%d\n",thread_end);
+    // thread_end=1;
+    // printf("thread_end=%d\n",thread_end);
     return tailpointer;
 }
 void* server_send_thread(void* p)
@@ -433,6 +473,7 @@ void* server_send_thread(void* p)
         addtoservlog("default sndpkt发送成功",myippointer);
         printf("default sndpkt发送成功\n");
         }
+        
     }
     
     pthread_exit((char *)"pthread exit!");
