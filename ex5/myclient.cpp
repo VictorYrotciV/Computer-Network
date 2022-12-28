@@ -63,7 +63,8 @@ struct pthread_para
 };
 
 int send_end_flag=0;
-
+//计时
+long long head,tail,freq;
 time_t nowtime;//time
 int ConnectWith3Handsks(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen){
     HEADER header;
@@ -311,7 +312,12 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
         pthread_create(&id,0,client_recv_thread,&(para));
 
     //**************************************************
-
+    //******time
+    QueryPerformanceCounter((LARGE_INTEGER *)&head);
+    char* tbuffer = new char[sizeof(head)+1];
+    memcpy(tbuffer,&head,sizeof(head));
+    sendto(clntSock, tbuffer, sizeof(head), 0, (sockaddr*)&servAddr, servAddrLen);
+    //************************************************************
     while(1){
         //**********************************************************
         //step 1 in GBN FSM
@@ -344,28 +350,28 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
             memcpy(buffer,&header,sizeof(header));
             memcpy(nowbuffer,&header,sizeof(header));
             memcpy(nowbuffer+sizeof(header),nowPktPointer,pktlen);
-            printf("\n发送校验和=%d\n",calc_chksum_rst);
+            // printf("\n发送校验和=%d\n",calc_chksum_rst);
             //udt_send(sndpkt)
             if(sendto(clntSock, buffer, sizeof(header)+pktlen, 0, (sockaddr*)&servAddr, servAddrLen)<0){
-            printf("udp发送错误\n");
-            addtoclntlog("[ERR ]UDP包发送错误",myippointer);
+            // printf("udp发送错误\n");
+            // addtoclntlog("[ERR ]UDP包发送错误",myippointer);
             continue;
             }
-            memset(message,0,sizeof(message));
-            sprintf(message,"[INFO]成功发送 %d bytes数据，nextseqnum=%d",pktlen,nextseqnum);
-            printf("%s\n",message);
-            addtoclntlog((const char*)message,myippointer);
-            sprintf(message,"[INFO]实际基序号base=%d，滑动窗口大小=%d",base+256*basejwnum,nextseqnum-(base+256*basejwnum));
-            printf("%s\n",message);
-            addtoclntlog((const char*)message,myippointer);
-            sprintf(message,"[INFO]发送UDP包的校验和checksum=%u，伪首部的8位SEQ=%d",calc_chksum_rst,int(header.SEQ));
-            printf("%s\n",message);
-            addtoclntlog((const char*)message,myippointer);
-            addtoclntlog("[MESG]UDP包发送成功",myippointer);
-            printf("udp包发送成功\n");
+            // memset(message,0,sizeof(message));
+            // sprintf(message,"[INFO]成功发送 %d bytes数据，nextseqnum=%d",pktlen,nextseqnum);
+            // printf("%s\n",message);
+            // addtoclntlog((const char*)message,myippointer);
+            // sprintf(message,"[INFO]实际基序号base=%d，滑动窗口大小=%d",base+256*basejwnum,nextseqnum-(base+256*basejwnum));
+            // printf("%s\n",message);
+            // addtoclntlog((const char*)message,myippointer);
+            // sprintf(message,"[INFO]发送UDP包的校验和checksum=%u，伪首部的8位SEQ=%d",calc_chksum_rst,int(header.SEQ));
+            // printf("%s\n",message);
+            // addtoclntlog((const char*)message,myippointer);
+            // addtoclntlog("[MESG]UDP包发送成功",myippointer);
+            // printf("udp包发送成功\n");
             //start timer
             if(base+256*basejwnum==nextseqnum){
-                addtoclntlog("[MESG]base==nextseqnum,开启计时器",myippointer);
+                // addtoclntlog("[MESG]base==nextseqnum,开启计时器",myippointer);
                 timerIsOpen=1;
                 now_clocktime=clock();
             }
@@ -373,10 +379,10 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
             //直接break的话，实际上由于recv在send之后，send完但是没有recv完
             //需要等到所有都recv完，即base=nextseqnum
             nextseqnum++;
-            addtoclntlog((const char*)message,myippointer);
-            sprintf(message,"[INFO]更新nextseqnum=%d",nextseqnum);
-            printf("%s\n",message);
-            addtoclntlog((const char*)message,myippointer);
+            // addtoclntlog((const char*)message,myippointer);
+            // sprintf(message,"[INFO]更新nextseqnum=%d",nextseqnum);
+            // printf("%s\n",message);
+            // addtoclntlog((const char*)message,myippointer);
             //remark 这里base是从header的seq复制下来的，应该只有0-255；
             //但如果你还没有注意到，那nextseqnum实际上并没有取余256
             //DONE
@@ -384,16 +390,16 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
 
         }else{
             //if(nextseqnum>=pktnum){break;}
-            memset(message,0,sizeof(message));
-            sprintf(message,"[INFO]实际基序号base=%d，nextseqnum=%d,滑动窗口大小=%d",base+256*basejwnum,nextseqnum,nextseqnum-(base+256*basejwnum));
-            printf("%s\n",message);
-            addtoclntlog((const char*)message,myippointer);
-            memset(message,0,sizeof(message));
-            // sprintf(message,"[ERR ]最大窗口大小=%d,窗口过大，拒绝data",WINDOW_SIZE);
-            sprintf(message,"[ERR ]最大窗口大小=%d,窗口过大，拒绝data",cwnd);
-            printf("%s\n",message);
-            addtoclntlog((const char*)message,myippointer);
-            printf("窗口过大，拒绝data\n");
+            // memset(message,0,sizeof(message));
+            // sprintf(message,"[INFO]实际基序号base=%d，nextseqnum=%d,滑动窗口大小=%d",base+256*basejwnum,nextseqnum,nextseqnum-(base+256*basejwnum));
+            // printf("%s\n",message);
+            // addtoclntlog((const char*)message,myippointer);
+            // memset(message,0,sizeof(message));
+            // // sprintf(message,"[ERR ]最大窗口大小=%d,窗口过大，拒绝data",WINDOW_SIZE);
+            // sprintf(message,"[ERR ]最大窗口大小=%d,窗口过大，拒绝data",cwnd);
+            // printf("%s\n",message);
+            // addtoclntlog((const char*)message,myippointer);
+            // printf("窗口过大，拒绝data\n");
         }
         //隐含条件：
         //else{refuse_data()}
@@ -409,8 +415,8 @@ int SendFileAsBinary(SOCKET& clntSock,SOCKADDR_IN& servAddr, int& servAddrLen, c
         
     }
     //跳到这里则所有pkt发送成功，发送一个over的flag
-    printf("发送结束标志\n");
-    addtoclntlog("[MESG]所有包发送完成，发送结束标志",myippointer);
+    // printf("发送结束标志\n");
+    // addtoclntlog("[MESG]所有包发送完成，发送结束标志",myippointer);
     header=HEADER();
     header.flag=OVERFLAG;
     header.checksum=0;
@@ -439,38 +445,40 @@ void* client_recv_thread(void* p)
     while(1)
     {
         if(recvfrom(clntSock, buffer, sizeof(header), 0, (sockaddr*)&servAddr, &servAddrLen)>0){
-            addtoclntlog("[MESG]接收到确认信息，进行校验",myippointer);
-            printf("接收到回复信息，进行校验\n");
+            // addtoclntlog("[MESG]接收到确认信息，进行校验",myippointer);
+            // printf("接收到回复信息，进行校验\n");
             //接收到了，进行校验，包括校验码和seq
             //接收端只返回一个header，
             memcpy(&temp1, buffer, sizeof(header));
             checksum_from_recv1=temp1.checksum;
             temp1.checksum=0;
             calc_chksum_rst=CalcChecksum((u_short*)&temp1,sizeof(temp1));
-            memset(message,0,sizeof(message));
-            sprintf(message,"[INFO]接收到的校验和=%u，计算出的校验和为%u",checksum_from_recv1,calc_chksum_rst);
-            printf("%s\n",message);
-            addtoclntlog((const char*)message,myippointer);
-            memset(message,0,sizeof(message));
-            sprintf(message,"[INFO]接收到的伪首部8位序列号SEQ=%d",temp1.SEQ);
-            printf("%s\n",message);
-            addtoclntlog((const char*)message,myippointer);
+            // memset(message,0,sizeof(message));
+            // sprintf(message,"[INFO]接收到的校验和=%u，计算出的校验和为%u",checksum_from_recv1,calc_chksum_rst);
+            // printf("%s\n",message);
+            // addtoclntlog((const char*)message,myippointer);
+            // memset(message,0,sizeof(message));
+            // sprintf(message,"[INFO]接收到的伪首部8位序列号SEQ=%d",temp1.SEQ);
+            // printf("%s\n",message);
+            // addtoclntlog((const char*)message,myippointer);
             if(calc_chksum_rst!=checksum_from_recv1){
                 //step 4 in GBN FSM
                 // i.e. rdt_rcv && corrupt
                 // go back to waiting status, i.e. do nothing indeed and continue
-                printf("%u!=%u,回传校验码不通过\n",calc_chksum_rst,checksum_from_recv1);
-                addtoclntlog("[ERR ]确认信息校验码校验不通过",myippointer);
+                // printf("%u!=%u,回传校验码不通过\n",calc_chksum_rst,checksum_from_recv1);
+                // addtoclntlog("[ERR ]确认信息校验码校验不通过",myippointer);
                 continue;
             }
             //到这里则接收并校验成功
             if((int(temp1.SEQ)+1)%256<base){basejwnum++;}
             //seq+1为0-255，如果到了256要变回0
             //**************************************
-            if(temp1.flag==DFTSNDPKT){addtoclntlog("[INFO]收到dftsndpkt!",myippointer);}
-            memset(message,0,sizeof(message));
-            sprintf(message,"[INFO]接收到的default andpkt 其SEQ=%d",temp1.SEQ);
-            printf("%s\n",message);
+            // if(temp1.flag==DFTSNDPKT){
+            //     addtoclntlog("[INFO]收到dftsndpkt!",myippointer);
+            // }
+            // memset(message,0,sizeof(message));
+            // sprintf(message,"[INFO]接收到的default andpkt 其SEQ=%d",temp1.SEQ);
+            // printf("%s\n",message);
             addtoclntlog((const char*)message,myippointer);
             //reno****************************************
             //got new ack or dup ack?
@@ -592,17 +600,20 @@ void* client_recv_thread(void* p)
                 }
             }
             lastSeq=temp1.SEQ;
-            memset(message,0,sizeof(message));
-            sprintf(message,"[INFO]dupacknum=%d",dupACKnum);
-            printf("%s\n",message);
-            addtoclntlog((const char*)message,myippointer);
+            // memset(message,0,sizeof(message));
+            // sprintf(message,"[INFO]dupacknum=%d",dupACKnum);
+            // printf("%s\n",message);
+            // addtoclntlog((const char*)message,myippointer);
 
             base=(int(temp1.SEQ)+1)%256;
+            // memset(message,0,sizeof(message));
+            // sprintf(message,"[INFO]base变量更新=%d，实际的基序号base=%d",base,base+256*basejwnum);
+            // printf("%s\n",message);
+            // addtoclntlog((const char*)message,myippointer);
+            // printf("收到的校验码=%d,序列号seq=%d,base更新为%d\n",checksum_from_recv1,temp1.SEQ,base);
             memset(message,0,sizeof(message));
-            sprintf(message,"[INFO]base变量更新=%d，实际的基序号base=%d",base,base+256*basejwnum);
+            sprintf(message,"[INFO]base=%d，nextseqnum=%d",base+256*basejwnum,nextseqnum);
             printf("%s\n",message);
-            addtoclntlog((const char*)message,myippointer);
-            printf("收到的校验码=%d,序列号seq=%d,base更新为%d\n",checksum_from_recv1,temp1.SEQ,base);
             if(base==nextseqnum%256)
             {
                 //TODO:stop_timer
@@ -622,16 +633,16 @@ void* client_recv_thread(void* p)
                 //已经ack完了
                 //继续发送，并等待ack
                 if(base+basejwnum*256==pktnum){
-                    addtoclntlog("[MESG]所有信息已发送，超时不重传",myippointer);
+                    // addtoclntlog("[MESG]所有信息已发送，超时不重传",myippointer);
                     break;
                 }
                 else{
-                    memset(message,0,sizeof(message));
-                    sprintf(message,"[INFO]实际的基序号base=%d，nextseqnum=%d，包总数=%d",base+256*basejwnum,nextseqnum,pktnum);
-                    printf("%s\n",message);
-                    addtoclntlog((const char*)message,myippointer);
-                    printf("所有包验证完毕，继续发送\n");
-                    addtoclntlog("[MESG]已发送的所有包验证完毕，继续发送与验证",myippointer);
+                    // memset(message,0,sizeof(message));
+                    // sprintf(message,"[INFO]实际的基序号base=%d，nextseqnum=%d，包总数=%d",base+256*basejwnum,nextseqnum,pktnum);
+                    // printf("%s\n",message);
+                    // addtoclntlog((const char*)message,myippointer);
+                    // printf("所有包验证完毕，继续发送\n");
+                    // addtoclntlog("[MESG]已发送的所有包验证完毕，继续发送与验证",myippointer);
                     continue;
                 }
                 
@@ -672,6 +683,12 @@ void* client_recv_thread(void* p)
                 int resend_index=base+256*basejwnum;
                 //通过状态机可知，从base到nextseqnum-1
                 //udt_send from base to nextseqnum-1
+
+                memset(message,0,sizeof(message));
+                sprintf(message,"[INFO]重传序列号从%d到%d的所有数据",resend_index,nextseqnum-1);
+                printf("%s\n",message);
+                addtoclntlog((const char*)message,myippointer);
+
                 for(resend_index;resend_index<nextseqnum;resend_index++)
                 {
                     if(resend_index==pktnum-1){
@@ -697,23 +714,27 @@ void* client_recv_thread(void* p)
                     memcpy(nowbuffer+sizeof(header),nowPktPointer,pktlen);
                     //udt_send(sndpkt)
                     if(sendto(clntSock, buffer, sizeof(header)+pktlen, 0, (sockaddr*)&servAddr, servAddrLen)<0){
-                    printf("udp发送错误\n");
-                    addtoclntlog("[ERR ][超时重传]udp包发送错误",myippointer);
+                    // printf("udp发送错误\n");
+                    // addtoclntlog("[ERR ][超时重传]udp包发送错误",myippointer);
                     continue;
                     }
-                    memset(message,0,sizeof(message));
-                    sprintf(message,"[INFO][重传]成功发送 %d bytes数据，重发的seq=%d,重发直至seq=nextseqnum=%d",pktlen,resend_index,nextseqnum);
-                    printf("%s\n",message);
-                    addtoclntlog((const char*)message,myippointer);
-                    sprintf(message,"[INFO][重传]当前实际基序号base=%d，滑动窗口大小=%d",resend_index,nextseqnum-(base+256*basejwnum));
-                    printf("%s\n",message);
-                    addtoclntlog((const char*)message,myippointer);
-                    sprintf(message,"[INFO][重传]发送UDP包的校验和checksum=%u，伪首部的8位SEQ=%d",calc_chksum_rst,int(header.SEQ));
-                    printf("%s\n",message);
-                    addtoclntlog((const char*)message,myippointer);
-                    addtoclntlog("[MESG][重传]UDP包发送成功",myippointer);
+                    // memset(message,0,sizeof(message));
+                    // sprintf(message,"[INFO][重传]成功发送 %d bytes数据，重发的seq=%d,重发直至seq=nextseqnum=%d",pktlen,resend_index,nextseqnum);
+                    // printf("%s\n",message);
+                    // addtoclntlog((const char*)message,myippointer);
+                    // sprintf(message,"[INFO][重传]当前实际基序号base=%d，滑动窗口大小=%d",resend_index,nextseqnum-(base+256*basejwnum));
+                    // printf("%s\n",message);
+                    // addtoclntlog((const char*)message,myippointer);
+                    // sprintf(message,"[INFO][重传]发送UDP包的校验和checksum=%u，伪首部的8位SEQ=%d",calc_chksum_rst,int(header.SEQ));
+                    // printf("%s\n",message);
+                    // addtoclntlog((const char*)message,myippointer);
+                    // addtoclntlog("[MESG][重传]UDP包发送成功",myippointer);
                     
                 }
+                memset(message,0,sizeof(message));
+                sprintf(message,"[INFO]重传完毕");
+                printf("%s\n",message);
+                addtoclntlog((const char*)message,myippointer);
             }
             }
         }
@@ -731,6 +752,9 @@ void* client_recv_thread(void* p)
 }
 void SendFileHelper()
 {
+    //计时******************************************************
+    QueryPerformanceFrequency((LARGE_INTEGER *)&freq);
+    //**********************************************************
     char* filename=new char[10000];
     printf("输入您想发送的文件名\n");
     scanf("%s",filename);
@@ -757,6 +781,13 @@ void SendFileHelper()
     addtoclntlog((const char*)message,myippointer);
     printf("文件名发送完毕\n");
     SendFileAsBinary(sock,sockAddr,lenn,filebuff,index);
+    //计时******************************************************
+    QueryPerformanceCounter((LARGE_INTEGER *)&tail);
+    float tttime=(tail-head)*1000.0/freq;
+    float ttl = (index*8)/((tail-head)/freq);
+    printf("时间=%fms\n",tttime);
+    printf("吞吐率=%fbps\n",ttl);
+    //**********************************************************
     memset(message,0,sizeof(message));
     sprintf(message,"[MESG]文件:%s接收完毕,长度为%dbytes",filename,index);
     addtoclntlog((const char*)message,myippointer);

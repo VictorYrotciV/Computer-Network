@@ -125,3 +125,5 @@ void addtoclntlog(const char* initmsg,char* ip)
 		fclose(logs);
 		} 
 }
+
+

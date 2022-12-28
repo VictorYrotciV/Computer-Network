@@ -42,7 +42,9 @@ struct pthread_para
     int clntAddrLen;
     char* fullData;
 };
-//
+//计时
+long long head,tail,freq;
+
 int thread_begin=0;
 int thread_end=0;
 int ConnectWith3Handsks(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen){
@@ -268,6 +270,14 @@ int RecvFile(SOCKET& servSock,SOCKADDR_IN& clntAddr, int& clntAddrLen, char* ful
     printf("准备接收\n");
 
     //**************************************************
+    //******time
+    
+    char* tbuffer = new char[sizeof(head)+1];
+    recvfrom(servSock,tbuffer,sizeof(head),0,(sockaddr*)&clntAddr,&clntAddrLen);
+    memcpy(&head,tbuffer,sizeof(head));
+    //************************************************************
+
+    //**************************************************
         //pthread
         //initiaize pthread params
 
@@ -480,6 +490,9 @@ void* server_send_thread(void* p)
 }
 void RecvFileHelper()
 {
+    //计时******************************************************
+    QueryPerformanceFrequency((LARGE_INTEGER *)&freq);
+    //**********************************************************
     char* filename=new char[10000];
     char* filebuff=new char[INT_MAX];
     int lenn=sizeof(sockAddr);
@@ -493,6 +506,10 @@ void RecvFileHelper()
     printf("%s\n",message);
     //int fileLen=RecvFile(servSock,sockAddr, lenn,filebuff);
     int fileLen=RecvFile(servSock,addrRouter, lenn,filebuff);
+    //计时******************************************************
+    QueryPerformanceCounter((LARGE_INTEGER *)&tail);
+    printf("总时延=%fms\n",(tail-head)*1000.0/freq);
+    //**********************************************************
     memset(message,0,sizeof(message));
     sprintf(message,"[MESG]文件:%s接收完毕,长度为%dbytes",filename,fileLen);
     addtoservlog((const char*)message,myippointer);
